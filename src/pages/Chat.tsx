@@ -9,9 +9,12 @@ import { streamAgentChat, type DisplayMessage } from '@/lib/skipAi'
 import pb from '@/lib/pocketbase/client'
 import { useToast } from '@/hooks/use-toast'
 import { useAuth } from '@/hooks/use-auth'
+import { useLocation } from 'react-router-dom'
 
 export default function Chat() {
   const { user } = useAuth()
+  const location = useLocation()
+  const initialMessage = location.state?.initialMessage as string | undefined
   const [messages, setMessages] = useState<DisplayMessage[]>([
     {
       id: 'welcome',
@@ -68,6 +71,13 @@ export default function Chat() {
     }
     loadHistory()
   }, [user])
+
+  useEffect(() => {
+    if (initialMessage) {
+      setInput(initialMessage)
+      window.history.replaceState({}, document.title)
+    }
+  }, [initialMessage])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })

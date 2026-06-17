@@ -2,19 +2,7 @@ routerAdd(
   'GET',
   '/backend/v1/doctor-id/test-connection',
   (e) => {
-    let token = ''
-    try {
-      const tokenRecord = $app.findFirstRecordByData(
-        'configuracoes_sistema',
-        'chave',
-        'duuid_token',
-      )
-      token = tokenRecord.getString('valor')
-    } catch (_) {}
-
-    if (!token) {
-      token = $secrets.get('DUUID_TOKEN') || ''
-    }
+    const token = $secrets.get('DUUID_TOKEN')
 
     if (!token) {
       return e.badRequestError(
@@ -22,42 +10,27 @@ routerAdd(
       )
     }
 
-    let endpoint = ''
-    try {
-      const urlRecord = $app.findFirstRecordByData('configuracoes_sistema', 'chave', 'doctorid_url')
-      endpoint = urlRecord.getString('valor')
-    } catch (_) {}
-
-    if (!endpoint) {
-      endpoint = $secrets.get('ENDPOINT_IDDOCTORS') || 'https://www.doctorid.com.br/api'
-    }
+    const endpoint =
+      'https://www.doctorid.com.br/api/shiftListing?tipoEscala=Semanal&horarioInicio=01/09/2025&horarioTermino=30/09/2025&apresentarDadosDeAtribuicao=1&apresentarDadosEspecificosDaEquipe=true'
 
     try {
-      const targetUrl = endpoint.endsWith('/') ? endpoint + 'hospitals' : endpoint + '/hospitals'
-      const resHosp = $http.send({
-        url: targetUrl,
+      const resShift = $http.send({
+        url: endpoint,
         method: 'GET',
-        headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+        headers: { DUUID: token, 'Content-Type': 'application/json' },
         timeout: 15,
       })
 
-      if (resHosp.statusCode >= 400) {
-        return e.badRequestError(
-          'A API retornou erro ou token inválido. Status: ' + resHosp.statusCode,
-        )
+      if (resShift.statusCode === 401 || resShift.statusCode === 403) {
+        return e.json(401, { error: 'Token expirado ou inválido. Atualize o DUUID_TOKEN.' })
       }
 
-      const data = Array.isArray(resHosp.json)
-        ? resHosp.json
-        : resHosp.json?.data || resHosp.json?.hospitals || []
-
-      if (!Array.isArray(data)) {
-        return e.badRequestError('A API foi alcançada mas retornou um formato de dados inesperado.')
+      if (resShift.statusCode >= 400) {
+        return e.badRequestError('A API retornou erro. Status: ' + resShift.statusCode)
       }
 
-      return e.json(200, { success: true, count: data.length })
+      return e.json(200, { success: true })
     } catch (err) {
-      $app.logger().error('DoctorID Test Connection API transport error', 'error', err.message)
       return e.internalServerError('Falha de comunicação (API Unreachable) ou timeout.')
     }
   },

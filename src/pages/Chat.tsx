@@ -4,7 +4,16 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert'
-import { Send, Bot, User, Loader2, RefreshCw, AlertCircle, MessageSquare } from 'lucide-react'
+import {
+  Send,
+  Bot,
+  User,
+  Loader2,
+  RefreshCw,
+  AlertCircle,
+  MessageSquare,
+  Activity,
+} from 'lucide-react'
 import { cn } from '@/lib/utils'
 import pb from '@/lib/pocketbase/client'
 import { useToast } from '@/hooks/use-toast'
@@ -88,6 +97,7 @@ export default function Chat() {
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [isSyncing, setIsSyncing] = useState(false)
+  const [isTesting, setIsTesting] = useState(false)
   const [isInitialLoad, setIsInitialLoad] = useState(true)
   const bottomRef = useRef<HTMLDivElement>(null)
   const { toast } = useToast()
@@ -152,17 +162,58 @@ export default function Chat() {
       const res = await pb.send('/backend/v1/shifts/sync', { method: 'POST' })
       toast({
         title: 'Sincronização concluída',
-        description: `${res.syncedShifts || 0} escalas e ${res.syncedHospitals || 0} hospitais integrados à inteligência com sucesso.`,
+        description: `${res.syncedShifts || 0} escalas integradas à inteligência com sucesso.`,
       })
     } catch (err: any) {
-      const errMsg = err.response?.error || err.message || 'Não foi possível sincronizar os dados.'
+      const isAuthError = err.status === 401 || err.status === 403
+      const errMsg = isAuthError
+        ? 'Token DUUID expirado ou inválido. Atualize o DUUID_TOKEN.'
+        : err.response?.error || err.message || 'Não foi possível sincronizar os dados.'
       toast({
-        title: 'Erro na sincronização',
+        title: isAuthError ? 'Autenticação Necessária' : 'Erro na sincronização',
         description: errMsg,
         variant: 'destructive',
       })
     } finally {
       setIsSyncing(false)
+    }
+  }
+
+  const handleTestConnection = async () => {
+    setIsTesting(true)
+    try {
+      const res = await fetch(
+        `${import.meta.env.VITE_POCKETBASE_URL}/backend/v1/doctor-id/test-connection`,
+        {
+          headers: { Authorization: pb.authStore.token },
+        },
+      )
+      const data = await res.json()
+      if (!res.ok) {
+        if (res.status === 401 || res.status === 403) {
+          toast({
+            title: 'Erro de Autenticação',
+            description:
+              'Token DUUID expirado ou inválido. Por favor, atualize o segredo DUUID_TOKEN.',
+            variant: 'destructive',
+          })
+        } else {
+          throw new Error(data.error || 'Falha ao testar conexão.')
+        }
+      } else {
+        toast({
+          title: 'Conexão Bem Sucedida',
+          description: 'A API Doctor ID está acessível e respondendo corretamente.',
+        })
+      }
+    } catch (err: any) {
+      toast({
+        title: 'Erro de Conexão',
+        description: err.message,
+        variant: 'destructive',
+      })
+    } finally {
+      setIsTesting(false)
     }
   }
 
@@ -286,20 +337,36 @@ export default function Chat() {
             Tire dúvidas em linguagem natural sobre escalas, horários e médicos.
           </p>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleSync}
-          disabled={isSyncing}
-          className="shadow-sm"
-        >
-          {isSyncing ? (
-            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-          ) : (
-            <RefreshCw className="h-4 w-4 mr-2" />
-          )}
-          Sincronizar Escalas
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleTestConnection}
+            disabled={isTesting || isSyncing}
+            className="shadow-sm"
+          >
+            {isTesting ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <Activity className="h-4 w-4 mr-2" />
+            )}
+            Testar Conexão
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleSync}
+            disabled={isSyncing || isTesting}
+            className="shadow-sm"
+          >
+            {isSyncing ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <RefreshCw className="h-4 w-4 mr-2" />
+            )}
+            Sincronizar Escalas
+          </Button>
+        </div>
       </div>
 
       <Card className="flex-1 flex flex-col border-0 shadow-sm overflow-hidden bg-white/50 backdrop-blur-sm relative">

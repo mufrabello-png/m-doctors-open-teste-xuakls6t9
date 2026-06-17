@@ -9,7 +9,6 @@ routerAdd(
 
     const message = body.message.trim()
 
-    // 1. Obter a chave de API da OpenAI
     const openAiKey = $secrets.get('OPEN_AI')
     if (!openAiKey) {
       return e.internalServerError(
@@ -17,50 +16,41 @@ routerAdd(
       )
     }
 
-    // 2. Buscar dados reais das escalas e hospitais para contexto
-    let shiftsData = []
-    let hospitalsData = []
+    const tools = [
+      {
+        type: 'function',
+        function: {
+          name: 'get_plantoes',
+          description:
+            'Busca a lista de plantões (escalas médicas) armazenadas na base local do sistema.',
+          parameters: {
+            type: 'object',
+            properties: {
+              filtro: {
+                type: 'string',
+                description: 'Filtro opcional. Ex: nome do médico ou instituição.',
+              },
+            },
+          },
+        },
+      },
+    ]
 
-    try {
-      const shifts = $app.findRecordsByFilter(
-        'shifts',
-        "status != 'cancelled'",
-        '-start_time',
-        100,
-        0,
-      )
-      shiftsData = shifts.map((s) => ({
-        doctor_name: s.getString('doctor_name'),
-        location: s.getString('location'),
-        start_time: s.getString('start_time'),
-        end_time: s.getString('end_time'),
-        status: s.getString('status'),
-      }))
-    } catch (err) {
-      $app.logger().error('Erro ao buscar shifts para contexto', 'error', err.message)
-    }
+    const messages = [
+      {
+        role: 'system',
+        content:
+          'Você é um assistente de escalas médicas. Ao ser questionado sobre plantões ou escalas, você DEVE priorizar a chamada da função `get_plantoes` para obter os dados do banco de dados local. Os dados retornados pela função são a sua ÚNICA "Source of Truth" (Fonte da Verdade). Não responda baseando-se em conhecimentos externos. Se não souber a resposta após buscar, diga claramente que não possui essa informação. Retorne números e horários em **negrito** e use listas para enumerar.',
+      },
+      {
+        role: 'user',
+        content: message,
+      },
+    ]
 
-    try {
-      const hospitals = $app.findRecordsByFilter('hospitals', 'ativo = true', 'nome', 100, 0)
-      hospitalsData = hospitals.map((h) => ({
-        nome: h.getString('nome'),
-        endereco: h.getString('endereco'),
-        cidade: h.getString('cidade'),
-        estado: h.getString('estado'),
-      }))
-    } catch (err) {
-      $app.logger().error('Erro ao buscar hospitais para contexto', 'error', err.message)
-    }
-
-    const contextJson = JSON.stringify({
-      hospitals: hospitalsData,
-      shifts: shiftsData,
-    })
-
-    // 3. Comunicação Direta com OpenAI
     let answer = ''
     try {
-      const res = $http.send({
+      let res = $http.send({
         url: 'https://api.openai.com/v1/chat/completions',
         method: 'POST',
         headers: {
@@ -69,39 +59,78 @@ routerAdd(
         },
         body: JSON.stringify({
           model: 'gpt-4o-mini',
-          messages: [
-            {
-              role: 'system',
-              content:
-                "Você é um assistente de escalas médicas inteligente. Responda à pergunta do usuário de forma clara, objetiva e em português, baseando-se EXCLUSIVAMENTE nos dados fornecidos abaixo em formato JSON. Não invente ou presuma informações. Se não souber ou a informação não estiver nos dados, diga claramente.\n\nREGRAS DE FORMATAÇÃO:\n- Coloque números, datas, e horários em **negrito**.\n- Use listas (- ou *) para enumerar múltiplos itens.\n- Se houver algum erro grave nos dados, inicie um parágrafo exatamente com a palavra 'ALERTA:'.\n\nDADOS REAIS DO SISTEMA EM JSON:\n" +
-                contextJson,
-            },
-            {
-              role: 'user',
-              content: message,
-            },
-          ],
+          messages: messages,
+          tools: tools,
+          tool_choice: 'auto',
         }),
         timeout: 30,
       })
 
-      if (res.statusCode >= 200 && res.statusCode < 300) {
+      if (res.statusCode >= 400) {
+        return e.json(res.statusCode, { error: res.json?.error?.message || 'Erro OpenAI' })
+      }
+
+      let responseMessage = res.json?.choices?.[0]?.message
+
+      if (responseMessage?.tool_calls && responseMessage.tool_calls.length > 0) {
+        messages.push(responseMessage)
+
+        for (const toolCall of responseMessage.tool_calls) {
+          if (toolCall.function.name === 'get_plantoes') {
+            let plantoesData = []
+            try {
+              const plantoes = $app.findRecordsByFilter('plantoes', '', '-created', 100, 0)
+              plantoesData = plantoes.map((p) => ({
+                instituicaoNome: p.getString('instituicaoNome'),
+                pessoaNome: p.getString('pessoaNome'),
+                horarioProgramado: p.getString('horarioInicioFimProgramado'),
+                diaDaSemana: p.getString('diaDaSemana'),
+                statusProfissional: p.getString('statusProfissional'),
+                pedidoSubstituicao: p.getString('pedidoSubstituicao'),
+                valorFormatado: p.getString('valorFormatado'),
+              }))
+            } catch (err) {
+              $app.logger().error('Erro ao buscar plantoes para ferramenta', 'error', err.message)
+            }
+
+            messages.push({
+              tool_call_id: toolCall.id,
+              role: 'tool',
+              name: 'get_plantoes',
+              content: JSON.stringify(plantoesData),
+            })
+          }
+        }
+
+        res = $http.send({
+          url: 'https://api.openai.com/v1/chat/completions',
+          method: 'POST',
+          headers: {
+            Authorization: 'Bearer ' + openAiKey,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: 'gpt-4o-mini',
+            messages: messages,
+          }),
+          timeout: 30,
+        })
+
+        if (res.statusCode >= 400) {
+          return e.json(res.statusCode, {
+            error: res.json?.error?.message || 'Erro OpenAI apos tool',
+          })
+        }
         answer =
           res.json?.choices?.[0]?.message?.content ||
           'Não foi possível gerar uma resposta coerente com os dados.'
       } else {
-        let errorMsg = 'Erro na comunicação com a API da OpenAI.'
-        if (res.json?.error?.message) {
-          errorMsg = res.json.error.message
-        }
-        return e.json(res.statusCode, { error: errorMsg })
+        answer = responseMessage?.content || 'Não foi possível processar a requisição.'
       }
     } catch (err) {
-      $app.logger().error('OpenAI API request failed', 'error', err.message)
       return e.internalServerError('Falha de comunicação ou timeout na API da OpenAI.')
     }
 
-    // 4. Salvar log de histórico na base historico_consultas
     try {
       const histCol = $app.findCollectionByNameOrId('historico_consultas')
       const record = new Record(histCol)
@@ -113,7 +142,6 @@ routerAdd(
       $app.logger().error('Erro ao salvar historico_consultas', 'erro', err.message)
     }
 
-    // 5. Retorno ao frontend
     return e.json(200, {
       content: answer,
     })

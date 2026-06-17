@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-06-17T19:33:20.956Z",
+  "generatedAt": "2026-06-17T19:47:46.356Z",
   "collections": [
     {
       "name": "users",
@@ -407,6 +407,172 @@
         }
       ],
       "indexes": ["CREATE UNIQUE INDEX idx_hospitals_doctor_id_ref ON hospitals (doctor_id_ref)"]
+    },
+    {
+      "name": "plantoes",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != ''",
+        "view": "@request.auth.id != ''",
+        "create": "@request.auth.id != ''",
+        "update": "@request.auth.id != ''",
+        "delete": "@request.auth.id != ''"
+      },
+      "fields": [
+        {
+          "name": "instituicaoNome",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "pessoaNome",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "especialidadeNome",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "tipoPlantaoNome",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "valorFormatado",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "duracaoEmHoras",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "diaDaSemana",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "pessoaNomeAtribuicao",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "substituicao",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "dataAtribuicao",
+          "type": "date",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "horaAtribuicao",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "horarioInicioProgramado",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "horarioTerminoProgramado",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "horarioInicioFimProgramado",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "statusProfissional",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "pedidoSubstituicao",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "fechado",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "diurno",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "isFinalDeSemana",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "pagamentoAVista",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "pagamentoAntecipado",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "valorPadrao",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "originalDaMaster",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": []
     }
   ]
 }

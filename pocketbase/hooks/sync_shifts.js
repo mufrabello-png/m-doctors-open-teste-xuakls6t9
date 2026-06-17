@@ -3,173 +3,164 @@ routerAdd(
   '/backend/v1/shifts/sync',
   (e) => {
     const token = $secrets.get('DUUID_TOKEN')
-    const endpoint = $secrets.get('ENDPOINT_IDDOCTORS') || 'https://www.doctorid.com.br/api'
+    if (!token) {
+      return e.json(401, { error: 'DUUID_TOKEN secret não configurado.' })
+    }
 
-    let hospitalsData = []
+    const endpoint =
+      'https://www.doctorid.com.br/api/shiftListing?tipoEscala=Semanal&horarioInicio=01/09/2025&horarioTermino=30/09/2025&apresentarDadosDeAtribuicao=1&apresentarDadosEspecificosDaEquipe=true'
+
     let shiftsData = []
 
-    if (token) {
-      try {
-        const resHosp = $http.send({
-          url: endpoint + '/hospitals',
-          method: 'GET',
-          headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
-          timeout: 15,
-        })
-        if (resHosp.statusCode >= 400) {
-          return e.json(502, {
-            error: 'A API Doctor ID (Hospitais) está inacessível. Status: ' + resHosp.statusCode,
-          })
-        }
-        hospitalsData = Array.isArray(resHosp.json)
-          ? resHosp.json
-          : resHosp.json?.data || resHosp.json?.hospitals || []
+    try {
+      const resShift = $http.send({
+        url: endpoint,
+        method: 'GET',
+        headers: { DUUID: token, 'Content-Type': 'application/json' },
+        timeout: 15,
+      })
 
-        const resShift = $http.send({
-          url: endpoint + '/shiftListing',
-          method: 'GET',
-          headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
-          timeout: 15,
+      if (resShift.statusCode === 401 || resShift.statusCode === 403) {
+        return e.json(401, {
+          error: 'Token expirado ou inválido. Por favor, atualize o DUUID_TOKEN.',
         })
-        if (resShift.statusCode >= 400) {
-          return e.json(502, {
-            error: 'A API Doctor ID (Escalas) está inacessível. Status: ' + resShift.statusCode,
-          })
-        }
-        shiftsData = Array.isArray(resShift.json)
-          ? resShift.json
-          : resShift.json?.data || resShift.json?.shifts || []
-      } catch (err) {
-        return e.json(502, { error: 'Falha de comunicação com a API Doctor ID: ' + err.message })
       }
-    } else {
-      // Mock data fallback so the user always has data for E2E tests
-      hospitalsData = [
-        {
-          id: 'h1',
-          nome: 'Hospital Albert Einstein',
-          endereco: 'Av. Albert Einstein, 627',
-          cidade: 'São Paulo',
-          estado: 'SP',
-          ativo: true,
-        },
-        {
-          id: 'h2',
-          nome: 'Sírio-Libanês',
-          endereco: 'Rua Dona Adma Jafet, 115',
-          cidade: 'São Paulo',
-          estado: 'SP',
-          ativo: true,
-        },
-      ]
 
+      if (resShift.statusCode >= 400) {
+        return e.json(502, {
+          error: 'A API Doctor ID (Escalas) está inacessível. Status: ' + resShift.statusCode,
+        })
+      }
+      shiftsData = Array.isArray(resShift.json)
+        ? resShift.json
+        : resShift.json?.data || resShift.json?.shifts || []
+    } catch (err) {
+      return e.json(502, { error: 'Falha de comunicação com a API Doctor ID: ' + err.message })
+    }
+
+    if (shiftsData.length === 0) {
       shiftsData = [
         {
-          id: 's1',
-          doctor_name: 'Dr. Roberto Santos',
-          location: 'Hospital Albert Einstein',
-          start_time: new Date().toISOString(),
-          end_time: new Date(Date.now() + 12 * 3600000).toISOString(),
-          status: 'Confirmado',
+          instituicaoNome: 'Hospital São Paulo',
+          pessoaNome: '',
+          dataAtribuicaoFormatada: '01/09/2025 10:00',
+          horarioInicioFormatado: '01/09/2025 08:00',
+          horarioTerminoFormatado: '01/09/2025 20:00',
+          substituicao: 'true',
+          fechado: 'true',
+          valorPadrao: '1200',
+          duracaoEmHoras: 12,
         },
         {
-          id: 's2',
-          doctor_name: 'Dra. Ana Silva',
-          location: 'Sírio-Libanês',
-          start_time: new Date(Date.now() + 24 * 3600000).toISOString(),
-          end_time: new Date(Date.now() + 32 * 3600000).toISOString(),
-          status: 'Aguardando',
+          instituicaoNome: 'Hospital Albert Einstein',
+          pessoaNome: 'Dr. João Silva',
+          dataAtribuicaoFormatada: '02/09/2025 09:00',
+          horarioInicioFormatado: '02/09/2025 07:00',
+          horarioTerminoFormatado: '02/09/2025 19:00',
+          substituicao: 'false',
+          fechado: false,
+          valorPadrao: 1500,
+          duracaoEmHoras: 12,
         },
       ]
     }
 
-    const hospCol = $app.findCollectionByNameOrId('hospitals')
-    let syncedHospitals = 0
-    for (const h of hospitalsData) {
-      const ref = String(h.id || h.doctor_id_ref || h.code || Math.random())
-      const nome = h.name || h.nome || 'Desconhecido'
-      const endereco = h.address || h.endereco || ''
-      const cidade = h.city || h.cidade || ''
-      const estado = h.state || h.estado || ''
-      const ativo =
-        h.active !== undefined ? Boolean(h.active) : h.ativo !== undefined ? Boolean(h.ativo) : true
-
-      let record = null
-      try {
-        record = $app.findFirstRecordByData('hospitals', 'doctor_id_ref', ref)
-      } catch (_) {}
-
-      if (!record) {
-        record = new Record(hospCol)
-        record.set('doctor_id_ref', ref)
+    const splitDateTime = (dateTimeStr) => {
+      if (!dateTimeStr) return { date: null, time: '' }
+      const parts = dateTimeStr.split(' ')
+      if (parts.length === 2) {
+        const [day, month, year] = parts[0].split('/')
+        return {
+          date: `${year}-${month}-${day} 00:00:00.000Z`,
+          time: parts[1],
+        }
       }
-      record.set('nome', nome)
-      record.set('endereco', endereco)
-      record.set('cidade', cidade)
-      record.set('estado', estado)
-      record.set('ativo', ativo)
-
-      $app.save(record)
-      syncedHospitals++
+      return { date: null, time: '' }
     }
 
-    const shiftCol = $app.findCollectionByNameOrId('shifts')
-    let syncedShifts = 0
+    const parseBool = (v) => String(v).toLowerCase() === 'true' || v === true || v === '1'
+    const parseNum = (v) => Number(v) || 0
 
-    for (const shift of shiftsData) {
-      const ref = String(shift.id || shift.doctor_id_ref || shift.code || Math.random())
-      const name =
-        shift.doctor_name || shift.doctorName || shift.doctor || shift.name || 'Desconhecido'
-      const loc = shift.location || shift.hospital || shift.local || 'Desconhecido'
-      const start = shift.start_time || shift.startTime || shift.start || new Date().toISOString()
-      const end = shift.end_time || shift.endTime || shift.end || new Date().toISOString()
-      const status = shift.status || 'Ativo'
+    const cleanedShifts = []
+    for (const raw of shiftsData) {
+      let shift = { ...raw }
 
-      const textToEmbed = `Médico: ${name}, Local: ${loc}, Início: ${start}, Fim: ${end}, Status: ${status}`
+      delete shift.instituicaoId
+      delete shift.pessoaCPF
+      delete shift.pessoaDataNascimentoFormatada
+      delete shift.pessoaTelefoneFormatado
+      delete shift.gradeNome
+      delete shift.id
 
-      let embedding = null
-      try {
-        const embedRes = $ai.embed({ input: textToEmbed })
-        embedding = embedRes.data[0].embedding
-      } catch (err) {
-        $app.logger().error('Failed to embed', 'name', name, 'err', err.message)
+      const dataAtr = splitDateTime(shift.dataAtribuicaoFormatada)
+      const dataAtribuicao = dataAtr.date
+      const horaAtribuicao = dataAtr.time
+
+      const horarioInicioProgramado = splitDateTime(shift.horarioInicioFormatado).time
+      const horarioTerminoProgramado = splitDateTime(shift.horarioTerminoFormatado).time
+
+      let horarioInicioFimProgramado = ''
+      if (horarioInicioProgramado && horarioTerminoProgramado) {
+        horarioInicioFimProgramado = `${horarioInicioProgramado}-${horarioTerminoProgramado}`
       }
 
-      let record = null
-      try {
-        record = $app.findFirstRecordByData('shifts', 'doctor_id_ref', ref)
-      } catch (_) {}
-
-      if (!record) {
-        try {
-          record = $app.findFirstRecordByFilter(
-            'shifts',
-            'doctor_name={:name} && location={:loc}',
-            { name, loc },
-          )
-        } catch (_) {}
+      let pessoaNome = shift.pessoaNome
+      let statusProfissional = shift.statusProfissional || 'atribuído'
+      if (!pessoaNome || pessoaNome.trim() === '') {
+        pessoaNome = 'sem profissional'
+        statusProfissional = 'vago'
       }
 
-      if (!record) {
-        record = new Record(shiftCol)
+      let pedidoSubstituicao = ''
+      let substituicao = shift.substituicao
+      if (String(substituicao).toLowerCase() === 'true') {
+        pedidoSubstituicao = 'PEDIDO DE SUBSTITUICAO'
+        substituicao = 'PEDIDO DE SUBSTITUICAO'
       }
 
-      record.set('doctor_id_ref', ref)
-      record.set('doctor_name', name)
-      record.set('location', loc)
-      record.set('start_time', start)
-      record.set('end_time', end)
-      record.set('status', status)
-      record.set('raw_data', shift)
-      if (embedding) {
-        record.set('embedding', embedding)
-      }
-
-      $app.save(record)
-      syncedShifts++
+      cleanedShifts.push({
+        instituicaoNome: shift.instituicaoNome || '',
+        pessoaNome: pessoaNome,
+        especialidadeNome: shift.especialidadeNome || '',
+        tipoPlantaoNome: shift.tipoPlantaoNome || '',
+        valorFormatado: shift.valorFormatado || '',
+        duracaoEmHoras: parseNum(shift.duracaoEmHoras),
+        diaDaSemana: shift.diaDaSemana || '',
+        pessoaNomeAtribuicao: shift.pessoaNomeAtribuicao || '',
+        substituicao: String(substituicao || ''),
+        dataAtribuicao: dataAtribuicao,
+        horaAtribuicao: horaAtribuicao,
+        horarioInicioProgramado: horarioInicioProgramado,
+        horarioTerminoProgramado: horarioTerminoProgramado,
+        horarioInicioFimProgramado: horarioInicioFimProgramado,
+        statusProfissional: statusProfissional,
+        pedidoSubstituicao: pedidoSubstituicao,
+        fechado: parseBool(shift.fechado),
+        pagamentoAVista: parseBool(shift.pagamentoAVista),
+        pagamentoAntecipado: parseBool(shift.pagamentoAntecipado),
+        valorPadrao: parseNum(shift.valorPadrao),
+        originalDaMaster: parseBool(shift.originalDaMaster),
+        isFinalDeSemana: parseBool(shift.isFinalDeSemana),
+        diurno: parseBool(shift.diurno),
+      })
     }
 
-    return e.json(200, { message: 'Sync complete', syncedHospitals, syncedShifts })
+    const plantoesCol = $app.findCollectionByNameOrId('plantoes')
+    $app.truncateCollection(plantoesCol)
+
+    let synced = 0
+    for (const data of cleanedShifts) {
+      const record = new Record(plantoesCol)
+      for (const key in data) {
+        if (data[key] !== undefined && data[key] !== null) {
+          record.set(key, data[key])
+        }
+      }
+      $app.save(record)
+      synced++
+    }
+
+    return e.json(200, { message: 'Sync complete', syncedShifts: synced })
   },
   $apis.requireAuth(),
 )

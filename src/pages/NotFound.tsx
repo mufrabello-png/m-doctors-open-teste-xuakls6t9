@@ -1,25 +1,20 @@
-/* 404 Page - Displays when a user attempts to access a non-existent route - translate to the language of the user */
-import { useLocation } from 'react-router-dom'
-import { useEffect } from 'react'
+import { Link } from 'react-router-dom'
+import { Button } from '@/components/ui/button'
+import { ActivitySquare } from 'lucide-react'
 
-const NotFound = () => {
-  const location = useLocation()
-
-  useEffect(() => {
-    console.error('404 Error: User attempted to access non-existent route:', location.pathname)
-  }, [location.pathname])
-
+export default function NotFound() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100">
-      <div className="text-center">
-        <h1 className="text-4xl font-bold mb-4">404</h1>
-        <p className="text-xl text-gray-600 mb-4">Oops! Page not found</p>
-        <a href="/" className="text-blue-500 hover:text-blue-700 underline">
-          Return to Home
-        </a>
+    <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4 text-center">
+      <div className="rounded-full bg-primary/10 p-4 mb-6">
+        <ActivitySquare className="h-12 w-12 text-primary" />
       </div>
+      <h1 className="text-4xl font-bold tracking-tight mb-2">404</h1>
+      <p className="text-xl text-muted-foreground mb-8 max-w-md">
+        Ops! Parece que a página que você está procurando não existe ou foi movida.
+      </p>
+      <Button asChild className="h-11 px-8">
+        <Link to="/">Voltar para o Início</Link>
+      </Button>
     </div>
   )
 }
-
-export default NotFound

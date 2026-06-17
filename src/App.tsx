@@ -1,27 +1,46 @@
-/* Main App Component - Handles routing (using react-router-dom), query client and other providers - use this file to add all routes */
+import { Suspense, lazy } from 'react'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { Toaster } from '@/components/ui/toaster'
 import { Toaster as Sonner } from '@/components/ui/sonner'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import Index from './pages/Index'
-import NotFound from './pages/NotFound'
-import Layout from './components/Layout'
+import Layout from '@/components/Layout'
+import { PageSkeleton } from '@/components/page-skeleton'
 
-// ONLY IMPORT AND RENDER WORKING PAGES, NEVER ADD PLACEHOLDER COMPONENTS OR PAGES IN THIS FILE
-// AVOID REMOVING ANY CONTEXT PROVIDERS FROM THIS FILE (e.g. TooltipProvider, Toaster, Sonner)
+// Lazy loaded pages to optimize performance as requested
+const Index = lazy(() => import('@/pages/Index'))
+const Dashboard = lazy(() => import('@/pages/Dashboard'))
+const Chat = lazy(() => import('@/pages/Chat'))
+const Alerts = lazy(() => import('@/pages/Alerts'))
+const Reports = lazy(() => import('@/pages/Reports'))
+const Settings = lazy(() => import('@/pages/Settings'))
+const NotFound = lazy(() => import('@/pages/NotFound'))
 
 const App = () => (
   <BrowserRouter>
     <TooltipProvider>
       <Toaster />
       <Sonner />
-      <Routes>
-        <Route element={<Layout />}>
+      <Suspense
+        fallback={
+          <div className="h-screen w-screen flex flex-col">
+            <PageSkeleton />
+          </div>
+        }
+      >
+        <Routes>
           <Route path="/" element={<Index />} />
-          {/* ADD ALL CUSTOM ROUTES MUST BE ADDED HERE */}
-        </Route>
-        <Route path="*" element={<NotFound />} />
-      </Routes>
+
+          <Route element={<Layout />}>
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/chat" element={<Chat />} />
+            <Route path="/alerts" element={<Alerts />} />
+            <Route path="/reports" element={<Reports />} />
+            <Route path="/settings" element={<Settings />} />
+          </Route>
+
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </Suspense>
     </TooltipProvider>
   </BrowserRouter>
 )

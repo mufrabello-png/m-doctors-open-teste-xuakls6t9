@@ -23,7 +23,6 @@ import pb from '@/lib/pocketbase/client'
 const loginSchema = z.object({
   email: z.string().email({ message: 'Por favor, insira um e-mail válido.' }),
   password: z.string().min(6, { message: 'A senha deve ter pelo menos 6 caracteres.' }),
-  duuid_token: z.string().min(1, { message: 'O DUUID TOKEN é obrigatório' }),
 })
 
 export default function Index() {
@@ -38,7 +37,6 @@ export default function Index() {
     defaultValues: {
       email: '',
       password: '',
-      duuid_token: '',
     },
   })
 
@@ -47,12 +45,7 @@ export default function Index() {
     setError(null)
 
     try {
-      const authData = await pb.collection('users').authWithPassword(values.email, values.password)
-
-      if (authData.record.duuid_token !== values.duuid_token) {
-        pb.authStore.clear()
-        throw new Error('DUUID Token incorreto.')
-      }
+      await pb.collection('users').authWithPassword(values.email, values.password)
 
       login()
       toast({
@@ -62,7 +55,7 @@ export default function Index() {
       navigate('/dashboard')
     } catch (err: any) {
       pb.authStore.clear()
-      setError('Credenciais ou DUUID Token incorretos. Verifique e tente novamente.')
+      setError('Credenciais incorretas. Verifique e tente novamente.')
     } finally {
       setIsLoading(false)
     }
@@ -121,24 +114,6 @@ export default function Index() {
                       <Input
                         type="password"
                         placeholder="••••••••"
-                        className="h-11 bg-white"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="duuid_token"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-sm font-medium">DUUID TOKEN</FormLabel>
-                    <FormControl>
-                      <Input
-                        placeholder="Insira seu DUUID Token"
                         className="h-11 bg-white"
                         {...field}
                       />

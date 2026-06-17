@@ -6,71 +6,23 @@ import { Button } from '@/components/ui/button'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import pb from '@/lib/pocketbase/client'
 import { Skeleton } from '@/components/ui/skeleton'
-
-const stats = [
-  {
-    title: 'Plantões Hoje',
-    value: '4',
-    icon: CalendarDays,
-    trend: '+1 desde ontem',
-    color: 'text-primary',
-    bg: 'bg-primary/10',
-  },
-  {
-    title: 'Escalas Pendentes',
-    value: '12',
-    icon: Clock,
-    trend: 'Requer atenção',
-    color: 'text-yellow-600',
-    bg: 'bg-yellow-100',
-  },
-  {
-    title: 'Alertas Ativos',
-    value: '3',
-    icon: AlertTriangle,
-    trend: '1 de alta prioridade',
-    color: 'text-destructive',
-    bg: 'bg-destructive/10',
-  },
-]
-
-const recentActivities = [
-  {
-    id: 1,
-    action: 'Troca de plantão aprovada',
-    doctor: 'Dra. Ana Silva',
-    time: 'Há 10 min',
-    status: 'Concluído',
-  },
-  {
-    id: 2,
-    action: 'Solicitação de cobertura',
-    doctor: 'Dr. Carlos Mendes',
-    time: 'Há 2 horas',
-    status: 'Pendente',
-  },
-  {
-    id: 3,
-    action: 'Nova escala publicada',
-    doctor: 'Coord. UTI',
-    time: 'Ontem',
-    status: 'Concluído',
-  },
-  {
-    id: 4,
-    action: 'Afastamento registrado',
-    doctor: 'Dr. Roberto Santos',
-    time: 'Ontem',
-    status: 'Atenção',
-  },
-]
+import { useAuth } from '@/hooks/use-auth'
 
 export default function Dashboard() {
+  const { user } = useAuth()
   const [shifts, setShifts] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [alertsCount, setAlertsCount] = useState(0)
 
   useEffect(() => {
+    if (user) {
+      pb.collection('alerts')
+        .getList(1, 1, { filter: 'lido = false' })
+        .then((res) => setAlertsCount(res.totalItems))
+        .catch(() => {})
+    }
+
     const fetchShifts = async () => {
       try {
         setIsLoading(true)
@@ -89,6 +41,33 @@ export default function Dashboard() {
     }
     fetchShifts()
   }, [])
+
+  const stats = [
+    {
+      title: 'Plantões Hoje',
+      value: shifts.length > 0 ? shifts.length.toString() : '0',
+      icon: CalendarDays,
+      trend: 'Atualizado hoje',
+      color: 'text-primary',
+      bg: 'bg-primary/10',
+    },
+    {
+      title: 'Alertas Não Lidos',
+      value: alertsCount.toString(),
+      icon: AlertTriangle,
+      trend: alertsCount > 0 ? 'Requer atenção' : 'Tudo em dia',
+      color: alertsCount > 0 ? 'text-destructive' : 'text-blue-600',
+      bg: alertsCount > 0 ? 'bg-destructive/10' : 'bg-blue-50',
+    },
+    {
+      title: 'Escalas Pendentes',
+      value: '0',
+      icon: Clock,
+      trend: 'Em conformidade',
+      color: 'text-yellow-600',
+      bg: 'bg-yellow-100',
+    },
+  ]
 
   return (
     <div className="space-y-6">

@@ -21,6 +21,7 @@ import {
 } from 'lucide-react'
 import useAuthStore from '@/stores/useAuthStore'
 import { cn } from '@/lib/utils'
+import { useProfile } from '@/hooks/use-profile'
 
 const navItems = [
   { title: 'Dashboard', url: '/dashboard', icon: LayoutDashboard },
@@ -33,6 +34,7 @@ const navItems = [
 export function AppSidebar() {
   const location = useLocation()
   const { logout } = useAuthStore()
+  const { profile } = useProfile()
 
   return (
     <Sidebar className="border-r border-border/50">
@@ -41,7 +43,9 @@ export function AppSidebar() {
           <Activity className="h-6 w-6" />
           <span>M Doctors</span>
         </div>
-        <p className="text-xs text-muted-foreground mt-1 px-1">OPNE TESTE</p>
+        <p className="text-xs text-muted-foreground mt-1 px-1">
+          {profile?.cargo || 'Membro da Equipe'}
+        </p>
       </SidebarHeader>
 
       <SidebarContent>

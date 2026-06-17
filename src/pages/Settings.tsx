@@ -5,7 +5,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import {
   Form,
   FormControl,
-  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -13,129 +12,145 @@ import {
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import { Switch } from '@/components/ui/switch'
 import { useToast } from '@/hooks/use-toast'
+import { useSystemConfigs } from '@/hooks/use-system-configs'
+import { useEffect } from 'react'
 
 const settingsSchema = z.object({
-  name: z.string().min(2, 'Nome deve ter pelo menos 2 caracteres.'),
-  email: z.string().email('E-mail inválido.'),
-  notifications: z.boolean(),
-  autoApprove: z.boolean(),
+  doctorid_url: z.string().url('URL inválida.').min(1, 'Campo obrigatório.'),
+  duuid_token: z.string().min(1, 'Campo obrigatório.'),
+  openai_key: z.string().min(1, 'Campo obrigatório.'),
 })
 
 export default function Settings() {
   const { toast } = useToast()
+  const { configs, saveConfigs, loading } = useSystemConfigs()
 
   const form = useForm<z.infer<typeof settingsSchema>>({
     resolver: zodResolver(settingsSchema),
     defaultValues: {
-      name: 'Dra. Usuária Teste',
-      email: 'dr.nome@hospital.com',
-      notifications: true,
-      autoApprove: false,
+      doctorid_url: '',
+      duuid_token: '',
+      openai_key: '',
     },
   })
 
-  const onSubmit = (values: z.infer<typeof settingsSchema>) => {
-    console.log(values)
-    toast({
-      title: 'Sucesso',
-      description: 'Alterações salvas com sucesso!',
-    })
+  useEffect(() => {
+    if (!loading) {
+      form.reset({
+        doctorid_url: configs.doctorid_url || '',
+        duuid_token: configs.duuid_token || '',
+        openai_key: configs.openai_key || '',
+      })
+    }
+  }, [configs, loading, form])
+
+  const onSubmit = async (values: z.infer<typeof settingsSchema>) => {
+    const { error } = await saveConfigs(values)
+    if (error) {
+      toast({
+        title: 'Erro',
+        description: 'Erro ao salvar as configurações. Tente novamente.',
+        variant: 'destructive',
+      })
+    } else {
+      toast({
+        title: 'Sucesso',
+        description: 'Configurações salvas com sucesso!',
+      })
+    }
   }
 
   return (
     <div className="space-y-6 max-w-2xl">
       <div>
         <h2 className="text-2xl font-bold tracking-tight">Configurações</h2>
-        <p className="text-muted-foreground">Gerencie suas preferências e perfil da conta.</p>
+        <p className="text-muted-foreground">
+          Gerencie as integrações de API e chaves de segurança.
+        </p>
       </div>
 
       <Card className="border-0 shadow-sm">
         <CardHeader>
-          <CardTitle>Perfil e Preferências</CardTitle>
-          <CardDescription>Atualize suas informações pessoais e de sistema.</CardDescription>
+          <CardTitle>Credenciais do Sistema</CardTitle>
+          <CardDescription>
+            Estas informações são armazenadas de forma criptografada para integração segura.
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-              <div className="space-y-4">
-                <FormField
-                  control={form.control}
-                  name="name"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Nome Completo</FormLabel>
-                      <FormControl>
-                        <Input className="h-11" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+          {loading ? (
+            <div className="space-y-4 text-center py-4 text-muted-foreground">
+              Carregando configurações...
+            </div>
+          ) : (
+            <Form {...form}>
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+                <div className="space-y-4">
+                  <FormField
+                    control={form.control}
+                    name="doctorid_url"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>URL Base API DoctorID</FormLabel>
+                        <FormControl>
+                          <Input
+                            className="h-11"
+                            placeholder="https://api.doctorid.com"
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
 
-                <FormField
-                  control={form.control}
-                  name="email"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>E-mail de Contato</FormLabel>
-                      <FormControl>
-                        <Input className="h-11" type="email" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
+                  <FormField
+                    control={form.control}
+                    name="duuid_token"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Token DUUID</FormLabel>
+                        <FormControl>
+                          <Input
+                            className="h-11"
+                            type="password"
+                            placeholder="••••••••"
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
 
-              <div className="space-y-4 pt-4 border-t border-border">
-                <h3 className="text-sm font-medium">Notificações do Sistema</h3>
+                  <FormField
+                    control={form.control}
+                    name="openai_key"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Chave OpenAI</FormLabel>
+                        <FormControl>
+                          <Input
+                            className="h-11"
+                            type="password"
+                            placeholder="sk-••••••••"
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
 
-                <FormField
-                  control={form.control}
-                  name="notifications"
-                  render={({ field }) => (
-                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4 shadow-sm">
-                      <div className="space-y-0.5">
-                        <FormLabel className="text-base">Alertas no App</FormLabel>
-                        <FormDescription>
-                          Receba notificações push sobre novas escalas.
-                        </FormDescription>
-                      </div>
-                      <FormControl>
-                        <Switch checked={field.value} onCheckedChange={field.onChange} />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="autoApprove"
-                  render={({ field }) => (
-                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4 shadow-sm">
-                      <div className="space-y-0.5">
-                        <FormLabel className="text-base">Aprovação Automática</FormLabel>
-                        <FormDescription>
-                          Aprovar trocas de plantão entre médicos automaticamente.
-                        </FormDescription>
-                      </div>
-                      <FormControl>
-                        <Switch checked={field.value} onCheckedChange={field.onChange} />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
-              </div>
-
-              <div className="flex justify-end pt-4">
-                <Button type="submit" className="h-11 w-full sm:w-auto px-8">
-                  Salvar Alterações
-                </Button>
-              </div>
-            </form>
-          </Form>
+                <div className="flex justify-end pt-4">
+                  <Button type="submit" className="h-11 w-full sm:w-auto px-8">
+                    Salvar Alterações
+                  </Button>
+                </div>
+              </form>
+            </Form>
+          )}
         </CardContent>
       </Card>
     </div>

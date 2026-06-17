@@ -4,10 +4,12 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Bell } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useProfile } from '@/hooks/use-profile'
 
 export function AppHeader() {
   const location = useLocation()
   const { isMobile } = useSidebar()
+  const { profile } = useProfile()
 
   const getPageTitle = () => {
     if (location.pathname.includes('/dashboard')) return 'Dashboard'
@@ -36,12 +38,17 @@ export function AppHeader() {
           <Bell className="h-5 w-5" />
           <span className="absolute top-2.5 right-2.5 h-2 w-2 rounded-full bg-destructive border-2 border-white" />
         </Button>
-        <Avatar className="h-10 w-10 border-2 border-border cursor-pointer transition-transform hover:scale-105">
+        <Avatar
+          className="h-10 w-10 border-2 border-border cursor-pointer transition-transform hover:scale-105"
+          title={profile?.nome_completo || 'Usuário'}
+        >
           <AvatarImage
             src="https://img.usecurling.com/ppl/thumbnail?gender=female&seed=2"
-            alt="Dr. User"
+            alt={profile?.nome_completo || 'Dr. User'}
           />
-          <AvatarFallback>MD</AvatarFallback>
+          <AvatarFallback>
+            {profile?.nome_completo ? profile.nome_completo.substring(0, 2).toUpperCase() : 'MD'}
+          </AvatarFallback>
         </Avatar>
       </div>
     </header>

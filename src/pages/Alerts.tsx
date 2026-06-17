@@ -1,47 +1,31 @@
+import { useEffect, useState } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { AlertCircle, Clock, CheckCircle2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-
-const mockAlerts = [
-  {
-    id: 1,
-    title: 'Falta de cobertura médica',
-    desc: 'Plantão Pediátrico sem médico escalado para amanhã.',
-    level: 'high',
-    time: '10 min atrás',
-  },
-  {
-    id: 2,
-    title: 'Conflito de horário',
-    desc: 'Dra. Maria Clara alocada em dois setores simultâneos.',
-    level: 'high',
-    time: '1 hora atrás',
-  },
-  {
-    id: 3,
-    title: 'Troca de plantão pendente',
-    desc: 'Dr. Lucas solicitou troca para o dia 15/10. Aguardando aprovação.',
-    level: 'medium',
-    time: '3 horas atrás',
-  },
-  {
-    id: 4,
-    title: 'Aviso de vencimento',
-    desc: 'Certificação ACLS de 2 profissionais vence este mês.',
-    level: 'low',
-    time: '1 dia atrás',
-  },
-  {
-    id: 5,
-    title: 'Atualização do sistema',
-    desc: 'O sistema ficará indisponível por 15min nesta madrugada.',
-    level: 'low',
-    time: '2 dias atrás',
-  },
-]
+import pb from '@/lib/pocketbase/client'
+import { useAuth } from '@/hooks/use-auth'
 
 export default function Alerts() {
+  const { user } = useAuth()
+  const [alerts, setAlerts] = useState<any[]>([])
+
+  useEffect(() => {
+    const loadAlerts = async () => {
+      try {
+        const records = await pb.collection('alerts').getFullList({
+          sort: '-created',
+        })
+        setAlerts(records)
+      } catch (err) {
+        console.error(err)
+      }
+    }
+    if (user) {
+      loadAlerts()
+    }
+  }, [user])
+
   const getLevelStyles = (level: string) => {
     switch (level) {
       case 'high':
@@ -75,6 +59,19 @@ export default function Alerts() {
     }
   }
 
+  const formatTime = (isoString: string) => {
+    try {
+      return new Date(isoString).toLocaleDateString('pt-BR', {
+        day: '2-digit',
+        month: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+      })
+    } catch {
+      return ''
+    }
+  }
+
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
       <div>
@@ -83,7 +80,7 @@ export default function Alerts() {
       </div>
 
       <div className="flex flex-col gap-3">
-        {mockAlerts.length === 0 ? (
+        {alerts.length === 0 ? (
           <div className="text-center p-12 bg-white rounded-xl border border-border border-dashed">
             <CheckCircle2 className="mx-auto h-12 w-12 text-primary opacity-50 mb-4" />
             <p className="text-lg font-medium text-foreground">Nenhum alerta ativo</p>
@@ -92,14 +89,18 @@ export default function Alerts() {
             </p>
           </div>
         ) : (
-          mockAlerts.map((alert) => {
-            const styles = getLevelStyles(alert.level)
+          alerts.map((alert) => {
+            const styles = getLevelStyles(alert.severidade)
             const Icon = styles.icon
 
             return (
               <Card
                 key={alert.id}
-                className={cn('border transition-colors hover:bg-muted/30', styles.border)}
+                className={cn(
+                  'border transition-colors hover:bg-muted/30',
+                  styles.border,
+                  alert.lido && 'opacity-70',
+                )}
               >
                 <CardContent className="p-4 sm:p-5 flex gap-4 items-start">
                   <div className={cn('mt-1 p-2 rounded-full shrink-0', styles.bg)}>
@@ -107,12 +108,14 @@ export default function Alerts() {
                   </div>
                   <div className="flex-1 space-y-1">
                     <div className="flex justify-between items-start gap-2">
-                      <h4 className="font-semibold text-foreground leading-none">{alert.title}</h4>
+                      <h4 className="font-semibold text-foreground leading-none">{alert.titulo}</h4>
                       <Badge variant="outline" className="text-xs shrink-0 bg-white">
-                        {alert.time}
+                        {formatTime(alert.created)}
                       </Badge>
                     </div>
-                    <p className="text-sm text-muted-foreground leading-snug pt-1">{alert.desc}</p>
+                    <p className="text-sm text-muted-foreground leading-snug pt-1">
+                      {alert.descricao}
+                    </p>
                   </div>
                 </CardContent>
               </Card>

@@ -8,8 +8,10 @@ import { cn } from '@/lib/utils'
 import { streamAgentChat, type DisplayMessage } from '@/lib/skipAi'
 import pb from '@/lib/pocketbase/client'
 import { useToast } from '@/hooks/use-toast'
+import { useAuth } from '@/hooks/use-auth'
 
 export default function Chat() {
+  const { user } = useAuth()
   const [messages, setMessages] = useState<DisplayMessage[]>([
     {
       id: 'welcome',
@@ -25,6 +27,47 @@ export default function Chat() {
   const bottomRef = useRef<HTMLDivElement>(null)
   const { toast } = useToast()
   const abortControllerRef = useRef<AbortController | null>(null)
+
+  useEffect(() => {
+    const loadHistory = async () => {
+      if (!user) return
+      try {
+        const history = await pb.collection('historico_consultas').getFullList({
+          sort: 'created',
+        })
+        if (history.length > 0) {
+          const loaded: DisplayMessage[] = [
+            {
+              id: 'welcome',
+              role: 'assistant',
+              content: 'Olá! Sou o Assistente DoctorID. Como posso ajudar com suas escalas hoje?',
+              created: new Date().toISOString(),
+            },
+          ]
+          history.forEach((h) => {
+            loaded.push({
+              id: h.id + '_q',
+              role: 'user',
+              content: h.pergunta,
+              created: h.created,
+            })
+            if (h.resposta) {
+              loaded.push({
+                id: h.id + '_a',
+                role: 'assistant',
+                content: h.resposta,
+                created: h.created,
+              })
+            }
+          })
+          setMessages(loaded)
+        }
+      } catch (err) {
+        console.error(err)
+      }
+    }
+    loadHistory()
+  }, [user])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -107,6 +150,16 @@ export default function Chat() {
       })
 
       setConversationId(res.headers.get('X-Conversation-Id') ?? result.conversation_id)
+
+      if (user) {
+        pb.collection('historico_consultas')
+          .create({
+            user_id: user.id,
+            pergunta: userText,
+            resposta: result.content,
+          })
+          .catch(console.error)
+      }
     } catch (err: any) {
       if (err.name === 'AbortError') return
       toast({

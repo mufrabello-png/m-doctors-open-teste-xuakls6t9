@@ -1,8 +1,9 @@
+import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
 import { useNavigate } from 'react-router-dom'
-import { Activity } from 'lucide-react'
+import { Activity, Loader2, AlertCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Form,
@@ -14,35 +15,56 @@ import {
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import useAuthStore from '@/stores/useAuthStore'
 import { useToast } from '@/hooks/use-toast'
+import pb from '@/lib/pocketbase/client'
 
 const loginSchema = z.object({
   email: z.string().email({ message: 'Por favor, insira um e-mail válido.' }),
   password: z.string().min(6, { message: 'A senha deve ter pelo menos 6 caracteres.' }),
+  duuid_token: z.string().min(1, { message: 'O DUUID TOKEN é obrigatório' }),
 })
 
 export default function Index() {
   const navigate = useNavigate()
   const { login } = useAuthStore()
   const { toast } = useToast()
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const form = useForm<z.infer<typeof loginSchema>>({
     resolver: zodResolver(loginSchema),
     defaultValues: {
       email: '',
       password: '',
+      duuid_token: '',
     },
   })
 
-  const onSubmit = (values: z.infer<typeof loginSchema>) => {
-    if (values.email && values.password) {
+  const onSubmit = async (values: z.infer<typeof loginSchema>) => {
+    setIsLoading(true)
+    setError(null)
+
+    try {
+      const authData = await pb.collection('users').authWithPassword(values.email, values.password)
+
+      if (authData.record.duuid_token !== values.duuid_token) {
+        pb.authStore.clear()
+        throw new Error('DUUID Token incorreto.')
+      }
+
       login()
       toast({
         title: 'Bem-vindo de volta!',
         description: 'Login realizado com sucesso.',
       })
       navigate('/dashboard')
+    } catch (err: any) {
+      pb.authStore.clear()
+      setError('Credenciais ou DUUID Token incorretos. Verifique e tente novamente.')
+    } finally {
+      setIsLoading(false)
     }
   }
 
@@ -107,11 +129,48 @@ export default function Index() {
                   </FormItem>
                 )}
               />
+
+              <FormField
+                control={form.control}
+                name="duuid_token"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-sm font-medium">DUUID TOKEN</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="Insira seu DUUID Token"
+                        className="h-11 bg-white"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {error && (
+                <Alert variant="destructive" className="animate-fade-in mt-4">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertTitle>Erro na autenticação</AlertTitle>
+                  <AlertDescription>{error}</AlertDescription>
+                </Alert>
+              )}
+
               <Button
                 type="submit"
-                className="w-full h-11 text-base mt-2 shadow-md hover:shadow-lg transition-all active:scale-[0.98]"
+                disabled={isLoading}
+                className="w-full h-11 text-base mt-4 shadow-md hover:shadow-lg transition-all active:scale-[0.98]"
               >
-                Entrar no Sistema
+                {isLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                    Validando...
+                  </>
+                ) : error ? (
+                  'Tentar novamente'
+                ) : (
+                  'Entrar no Sistema'
+                )}
               </Button>
             </form>
           </Form>

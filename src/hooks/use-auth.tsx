@@ -35,11 +35,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         .catch(() => pb.authStore.clear())
         .finally(() => setLoading(false))
     } else {
-      // Auto-login seeded user for seamless E2E application testing experience
-      pb.collection('users')
-        .authWithPassword('indicadores@mdoctors.com.br', 'Skip@Pass')
-        .catch(() => pb.authStore.clear())
-        .finally(() => setLoading(false))
+      setLoading(false)
     }
     return () => {
       unsubscribe()

@@ -2,13 +2,22 @@ import { Outlet, Navigate } from 'react-router-dom'
 import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar'
 import { AppSidebar } from './app-sidebar'
 import { AppHeader } from './app-header'
-import useAuthStore from '@/stores/useAuthStore'
+import { useAuth } from '@/hooks/use-auth'
+import { PageSkeleton } from '@/components/page-skeleton'
 
 export default function Layout() {
-  const { isAuthenticated } = useAuthStore()
+  const { isAuthenticated, loading } = useAuth()
+
+  if (loading) {
+    return (
+      <div className="h-screen w-screen flex flex-col">
+        <PageSkeleton />
+      </div>
+    )
+  }
 
   if (!isAuthenticated) {
-    return <Navigate to="/" replace />
+    return <Navigate to="/login" replace />
   }
 
   return (

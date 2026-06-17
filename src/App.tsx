@@ -9,6 +9,7 @@ import { ErrorBoundary } from '@/components/error-boundary'
 import { AuthProvider } from '@/hooks/use-auth'
 
 // Lazy loaded pages to optimize performance as requested
+const Login = lazy(() => import('@/pages/Login'))
 const Index = lazy(() => import('@/pages/Index'))
 const Dashboard = lazy(() => import('@/pages/Dashboard'))
 const Chat = lazy(() => import('@/pages/Chat'))
@@ -32,6 +33,7 @@ const App = () => (
             }
           >
             <Routes>
+              <Route path="/login" element={<Login />} />
               <Route element={<Layout />}>
                 <Route path="/" element={<Index />} />
                 <Route path="/dashboard" element={<Dashboard />} />

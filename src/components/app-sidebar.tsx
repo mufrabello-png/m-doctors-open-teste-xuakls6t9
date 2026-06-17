@@ -19,7 +19,7 @@ import {
   LogOut,
   Activity,
 } from 'lucide-react'
-import useAuthStore from '@/stores/useAuthStore'
+import { useAuth } from '@/hooks/use-auth'
 import { cn } from '@/lib/utils'
 import { useProfile } from '@/hooks/use-profile'
 
@@ -33,7 +33,7 @@ const navItems = [
 
 export function AppSidebar() {
   const location = useLocation()
-  const { logout } = useAuthStore()
+  const { signOut } = useAuth()
   const { profile } = useProfile()
 
   return (
@@ -82,7 +82,7 @@ export function AppSidebar() {
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton
-              onClick={logout}
+              onClick={signOut}
               className="h-11 px-4 text-destructive hover:bg-destructive/10 hover:text-destructive rounded-lg transition-colors"
             >
               <LogOut className="h-5 w-5 mr-3" />

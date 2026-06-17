@@ -5,7 +5,7 @@ routerAdd(
     const userId = e.auth?.id
     if (!userId) return e.unauthorizedError('auth required')
 
-    const token = $secrets.get('DOCTORID_API_TOKEN') || 'mock_token'
+    const token = $secrets.get('DUUID_TOKEN') || 'mock_token'
     const endpoint =
       $secrets.get('ENDPOINT_IDDOCTORS') || 'https://www.doctorid.com.br/api/shiftListing'
 

@@ -2,9 +2,9 @@ routerAdd(
   'GET',
   '/backend/v1/shifts',
   (e) => {
-    const token = $secrets.get('DOCTORID_API_TOKEN') || ''
+    const token = $secrets.get('DUUID_TOKEN') || ''
     if (!token) {
-      return e.internalServerError('DOCTORID_API_TOKEN is not configured in project secrets.')
+      return e.internalServerError('DUUID_TOKEN is not configured in project secrets.')
     }
 
     const endpoint =

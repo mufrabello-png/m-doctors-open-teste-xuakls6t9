@@ -2,7 +2,7 @@ cronAdd('verificacao_alertas', '0 * * * *', () => {
   const users = $app.findRecordsByFilter('users', '1=1', 'created', 100, 0)
   if (!users || users.length === 0) return
 
-  const token = $secrets.get('DOCTORID_API_TOKEN') || 'mock_token'
+  const token = $secrets.get('DUUID_TOKEN') || 'mock_token'
   const endpoint =
     $secrets.get('ENDPOINT_IDDOCTORS') || 'https://www.doctorid.com.br/api/shiftListing'
 

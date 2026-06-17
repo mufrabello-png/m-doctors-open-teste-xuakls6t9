@@ -14,7 +14,9 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/hooks/use-toast'
 import { useSystemConfigs } from '@/hooks/use-system-configs'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
+import { Activity, Loader2 } from 'lucide-react'
+import pb from '@/lib/pocketbase/client'
 
 const settingsSchema = z.object({
   doctorid_url: z.string().url('URL inválida.').min(1, 'Campo obrigatório.'),
@@ -25,6 +27,26 @@ const settingsSchema = z.object({
 export default function Settings() {
   const { toast } = useToast()
   const { configs, saveConfigs, loading } = useSystemConfigs()
+  const [testingConnection, setTestingConnection] = useState(false)
+
+  const handleTestConnection = async () => {
+    setTestingConnection(true)
+    try {
+      const res = await pb.send('/backend/v1/doctor-id/test-connection', { method: 'GET' })
+      toast({
+        title: 'Conexão bem-sucedida',
+        description: `Connection successful: ${res.count} hospitals found`,
+      })
+    } catch (err: any) {
+      toast({
+        title: 'Erro de Conexão',
+        description: err.response?.message || err.message || 'Falha ao conectar com a API',
+        variant: 'destructive',
+      })
+    } finally {
+      setTestingConnection(false)
+    }
+  }
 
   const form = useForm<z.infer<typeof settingsSchema>>({
     resolver: zodResolver(settingsSchema),
@@ -143,8 +165,22 @@ export default function Settings() {
                   />
                 </div>
 
-                <div className="flex justify-end pt-4">
-                  <Button type="submit" className="h-11 w-full sm:w-auto px-8">
+                <div className="flex flex-col sm:flex-row justify-end pt-4 gap-4">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-11 w-full sm:w-auto px-8"
+                    onClick={handleTestConnection}
+                    disabled={testingConnection || loading}
+                  >
+                    {testingConnection ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Activity className="mr-2 h-4 w-4" />
+                    )}
+                    Testar Conexão
+                  </Button>
+                  <Button type="submit" className="h-11 w-full sm:w-auto px-8" disabled={loading}>
                     Salvar Alterações
                   </Button>
                 </div>

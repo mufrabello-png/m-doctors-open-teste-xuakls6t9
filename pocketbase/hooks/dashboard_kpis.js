@@ -28,7 +28,7 @@ routerAdd(
         baseUrl = $secrets.get('ENDPOINT_IDDOCTORS') || 'https://www.doctorid.com.br/api'
       }
       if (!token) {
-        token = $secrets.get('DOCTORID_API_TOKEN') || ''
+        token = $secrets.get('DUUID_TOKEN') || ''
       }
 
       if (!token) {

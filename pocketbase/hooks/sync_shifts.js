@@ -2,7 +2,7 @@ routerAdd(
   'POST',
   '/backend/v1/shifts/sync',
   (e) => {
-    const token = $secrets.get('DOCTORID_API_TOKEN')
+    const token = $secrets.get('DUUID_TOKEN')
     const endpoint = $secrets.get('ENDPOINT_IDDOCTORS') || 'https://www.doctorid.com.br/api'
 
     let hospitalsData = []

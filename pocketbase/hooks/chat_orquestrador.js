@@ -17,10 +17,11 @@ routerAdd(
       )
     }
 
-    // 2. Buscar dados reais das escalas para contexto
-    let shiftsContext = 'Nenhuma escala encontrada no sistema.'
+    // 2. Buscar dados reais das escalas e hospitais para contexto
+    let shiftsData = []
+    let hospitalsData = []
+
     try {
-      // Buscar até 100 registros de escalas não canceladas para usar de contexto
       const shifts = $app.findRecordsByFilter(
         'shifts',
         "status != 'cancelled'",
@@ -28,16 +29,33 @@ routerAdd(
         100,
         0,
       )
-      if (shifts && shifts.length > 0) {
-        shiftsContext = shifts
-          .map((s) => {
-            return `- Médico: ${s.getString('doctor_name')} | Local: ${s.getString('location')} | Início: ${s.getString('start_time')} | Fim: ${s.getString('end_time')} | Status: ${s.getString('status')}`
-          })
-          .join('\n')
-      }
+      shiftsData = shifts.map((s) => ({
+        doctor_name: s.getString('doctor_name'),
+        location: s.getString('location'),
+        start_time: s.getString('start_time'),
+        end_time: s.getString('end_time'),
+        status: s.getString('status'),
+      }))
     } catch (err) {
       $app.logger().error('Erro ao buscar shifts para contexto', 'error', err.message)
     }
+
+    try {
+      const hospitals = $app.findRecordsByFilter('hospitals', 'ativo = true', 'nome', 100, 0)
+      hospitalsData = hospitals.map((h) => ({
+        nome: h.getString('nome'),
+        endereco: h.getString('endereco'),
+        cidade: h.getString('cidade'),
+        estado: h.getString('estado'),
+      }))
+    } catch (err) {
+      $app.logger().error('Erro ao buscar hospitais para contexto', 'error', err.message)
+    }
+
+    const contextJson = JSON.stringify({
+      hospitals: hospitalsData,
+      shifts: shiftsData,
+    })
 
     // 3. Comunicação Direta com OpenAI
     let answer = ''
@@ -55,8 +73,8 @@ routerAdd(
             {
               role: 'system',
               content:
-                "Você é um assistente de escalas médicas inteligente. Responda à pergunta do usuário de forma clara, objetiva e em português, baseando-se EXCLUSIVAMENTE nos dados das escalas fornecidos abaixo. Não invente ou presuma informações. Se não souber ou a informação não estiver nas escalas, diga claramente.\n\nREGRAS DE FORMATAÇÃO:\n- Coloque números, datas, e horários em **negrito**.\n- Use listas (- ou *) para enumerar múltiplos itens.\n- Se houver algum erro grave nos dados, inicie um parágrafo exatamente com a palavra 'ALERTA:'.\n\nDADOS REAIS DAS ESCALAS:\n" +
-                shiftsContext,
+                "Você é um assistente de escalas médicas inteligente. Responda à pergunta do usuário de forma clara, objetiva e em português, baseando-se EXCLUSIVAMENTE nos dados fornecidos abaixo em formato JSON. Não invente ou presuma informações. Se não souber ou a informação não estiver nos dados, diga claramente.\n\nREGRAS DE FORMATAÇÃO:\n- Coloque números, datas, e horários em **negrito**.\n- Use listas (- ou *) para enumerar múltiplos itens.\n- Se houver algum erro grave nos dados, inicie um parágrafo exatamente com a palavra 'ALERTA:'.\n\nDADOS REAIS DO SISTEMA EM JSON:\n" +
+                contextJson,
             },
             {
               role: 'user',

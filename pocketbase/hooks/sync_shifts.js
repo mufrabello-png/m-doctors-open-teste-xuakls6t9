@@ -2,38 +2,80 @@ routerAdd(
   'POST',
   '/backend/v1/shifts/sync',
   (e) => {
-    const token = $secrets.get('DOCTORID_API_TOKEN') || 'mock_token'
-    const endpoint =
-      $secrets.get('ENDPOINT_IDDOCTORS') || 'https://www.doctorid.com.br/api/shiftListing'
+    const token = $secrets.get('DOCTORID_API_TOKEN')
+    const endpoint = $secrets.get('ENDPOINT_IDDOCTORS') || 'https://www.doctorid.com.br/api'
 
-    let shifts = []
-    try {
-      const res = $http.send({
-        url: endpoint,
-        method: 'GET',
-        headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
-        timeout: 15,
-      })
-      if (res.statusCode < 400 && res.json) {
-        shifts = Array.isArray(res.json) ? res.json : res.json.data || res.json.shifts || []
+    let hospitalsData = []
+    let shiftsData = []
+
+    if (token) {
+      try {
+        const resHosp = $http.send({
+          url: endpoint + '/hospitals',
+          method: 'GET',
+          headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+          timeout: 15,
+        })
+        if (resHosp.statusCode >= 400) {
+          return e.json(502, {
+            error: 'A API Doctor ID (Hospitais) está inacessível. Status: ' + resHosp.statusCode,
+          })
+        }
+        hospitalsData = Array.isArray(resHosp.json)
+          ? resHosp.json
+          : resHosp.json?.data || resHosp.json?.hospitals || []
+
+        const resShift = $http.send({
+          url: endpoint + '/shiftListing',
+          method: 'GET',
+          headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+          timeout: 15,
+        })
+        if (resShift.statusCode >= 400) {
+          return e.json(502, {
+            error: 'A API Doctor ID (Escalas) está inacessível. Status: ' + resShift.statusCode,
+          })
+        }
+        shiftsData = Array.isArray(resShift.json)
+          ? resShift.json
+          : resShift.json?.data || resShift.json?.shifts || []
+      } catch (err) {
+        return e.json(502, { error: 'Falha de comunicação com a API Doctor ID: ' + err.message })
       }
-    } catch (err) {
-      $app.logger().error('Sync API error', 'msg', err.message)
-    }
-
-    // Idempotent mock data fallback so the user always has data for E2E tests
-    if (!shifts || shifts.length === 0) {
-      shifts = [
+    } else {
+      // Mock data fallback so the user always has data for E2E tests
+      hospitalsData = [
         {
+          id: 'h1',
+          nome: 'Hospital Albert Einstein',
+          endereco: 'Av. Albert Einstein, 627',
+          cidade: 'São Paulo',
+          estado: 'SP',
+          ativo: true,
+        },
+        {
+          id: 'h2',
+          nome: 'Sírio-Libanês',
+          endereco: 'Rua Dona Adma Jafet, 115',
+          cidade: 'São Paulo',
+          estado: 'SP',
+          ativo: true,
+        },
+      ]
+
+      shiftsData = [
+        {
+          id: 's1',
           doctor_name: 'Dr. Roberto Santos',
-          location: 'UTI Central',
+          location: 'Hospital Albert Einstein',
           start_time: new Date().toISOString(),
           end_time: new Date(Date.now() + 12 * 3600000).toISOString(),
           status: 'Confirmado',
         },
         {
+          id: 's2',
           doctor_name: 'Dra. Ana Silva',
-          location: 'Emergência',
+          location: 'Sírio-Libanês',
           start_time: new Date(Date.now() + 24 * 3600000).toISOString(),
           end_time: new Date(Date.now() + 32 * 3600000).toISOString(),
           status: 'Aguardando',
@@ -41,10 +83,41 @@ routerAdd(
       ]
     }
 
-    const col = $app.findCollectionByNameOrId('shifts')
-    let synced = 0
+    const hospCol = $app.findCollectionByNameOrId('hospitals')
+    let syncedHospitals = 0
+    for (const h of hospitalsData) {
+      const ref = String(h.id || h.doctor_id_ref || h.code || Math.random())
+      const nome = h.name || h.nome || 'Desconhecido'
+      const endereco = h.address || h.endereco || ''
+      const cidade = h.city || h.cidade || ''
+      const estado = h.state || h.estado || ''
+      const ativo =
+        h.active !== undefined ? Boolean(h.active) : h.ativo !== undefined ? Boolean(h.ativo) : true
 
-    for (const shift of shifts) {
+      let record = null
+      try {
+        record = $app.findFirstRecordByData('hospitals', 'doctor_id_ref', ref)
+      } catch (_) {}
+
+      if (!record) {
+        record = new Record(hospCol)
+        record.set('doctor_id_ref', ref)
+      }
+      record.set('nome', nome)
+      record.set('endereco', endereco)
+      record.set('cidade', cidade)
+      record.set('estado', estado)
+      record.set('ativo', ativo)
+
+      $app.save(record)
+      syncedHospitals++
+    }
+
+    const shiftCol = $app.findCollectionByNameOrId('shifts')
+    let syncedShifts = 0
+
+    for (const shift of shiftsData) {
+      const ref = String(shift.id || shift.doctor_id_ref || shift.code || Math.random())
       const name =
         shift.doctor_name || shift.doctorName || shift.doctor || shift.name || 'Desconhecido'
       const loc = shift.location || shift.hospital || shift.local || 'Desconhecido'
@@ -64,16 +137,24 @@ routerAdd(
 
       let record = null
       try {
-        record = $app.findFirstRecordByFilter('shifts', 'doctor_name={:name} && location={:loc}', {
-          name,
-          loc,
-        })
+        record = $app.findFirstRecordByData('shifts', 'doctor_id_ref', ref)
       } catch (_) {}
 
       if (!record) {
-        record = new Record(col)
+        try {
+          record = $app.findFirstRecordByFilter(
+            'shifts',
+            'doctor_name={:name} && location={:loc}',
+            { name, loc },
+          )
+        } catch (_) {}
       }
 
+      if (!record) {
+        record = new Record(shiftCol)
+      }
+
+      record.set('doctor_id_ref', ref)
       record.set('doctor_name', name)
       record.set('location', loc)
       record.set('start_time', start)
@@ -85,10 +166,10 @@ routerAdd(
       }
 
       $app.save(record)
-      synced++
+      syncedShifts++
     }
 
-    return e.json(200, { message: 'Sync complete', synced })
+    return e.json(200, { message: 'Sync complete', syncedHospitals, syncedShifts })
   },
   $apis.requireAuth(),
 )

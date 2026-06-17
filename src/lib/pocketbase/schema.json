@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-06-17T19:14:51.267Z",
+  "generatedAt": "2026-06-17T19:24:32.219Z",
   "collections": [
     {
       "name": "users",
@@ -118,9 +118,18 @@
           "required": false,
           "system": false,
           "autodateTriggers": ["onCreate", "onUpdate"]
+        },
+        {
+          "name": "doctor_id_ref",
+          "type": "text",
+          "required": false,
+          "system": false
         }
       ],
-      "indexes": []
+      "indexes": [
+        "CREATE INDEX `idx_shifts_doctor_id_ref` ON `shifts` (doctor_id_ref)",
+        "CREATE INDEX `idx_shifts_start_time_location` ON `shifts` (start_time, location)"
+      ]
     },
     {
       "name": "profiles",
@@ -334,6 +343,70 @@
         }
       ],
       "indexes": ["CREATE INDEX idx_historico_consultas_user_id ON historico_consultas (user_id)"]
+    },
+    {
+      "name": "hospitals",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != ''",
+        "view": "@request.auth.id != ''",
+        "create": "@request.auth.id != ''",
+        "update": "@request.auth.id != ''",
+        "delete": "@request.auth.id != ''"
+      },
+      "fields": [
+        {
+          "name": "doctor_id_ref",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "nome",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "endereco",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "cidade",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "estado",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "ativo",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": ["CREATE UNIQUE INDEX idx_hospitals_doctor_id_ref ON hospitals (doctor_id_ref)"]
     }
   ]
 }

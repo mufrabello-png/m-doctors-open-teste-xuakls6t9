@@ -152,12 +152,13 @@ export default function Chat() {
       const res = await pb.send('/backend/v1/shifts/sync', { method: 'POST' })
       toast({
         title: 'Sincronização concluída',
-        description: `${res.synced} escalas integradas à inteligência com sucesso.`,
+        description: `${res.syncedShifts || 0} escalas e ${res.syncedHospitals || 0} hospitais integrados à inteligência com sucesso.`,
       })
     } catch (err: any) {
+      const errMsg = err.response?.error || err.message || 'Não foi possível sincronizar os dados.'
       toast({
         title: 'Erro na sincronização',
-        description: err.message || 'Não foi possível sincronizar as escalas.',
+        description: errMsg,
         variant: 'destructive',
       })
     } finally {

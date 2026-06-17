@@ -66,16 +66,22 @@ routerAdd(
     }
 
     const splitDateTime = (dateTimeStr) => {
-      if (!dateTimeStr) return { date: null, time: '' }
+      if (!dateTimeStr || typeof dateTimeStr !== 'string') return { date: '', time: '' }
       const parts = dateTimeStr.split(' ')
-      if (parts.length === 2) {
-        const [day, month, year] = parts[0].split('/')
-        return {
-          date: `${year}-${month}-${day} 00:00:00.000Z`,
-          time: parts[1],
+      if (parts.length >= 2) {
+        const datePart = parts[0]
+        const timePart = parts[1]
+        if (datePart.includes('/')) {
+          const [day, month, year] = datePart.split('/')
+          if (year && month && day) {
+            return {
+              date: `${year}-${month}-${day} 00:00:00.000Z`,
+              time: timePart,
+            }
+          }
         }
       }
-      return { date: null, time: '' }
+      return { date: '', time: '' }
     }
 
     const parseBool = (v) => String(v).toLowerCase() === 'true' || v === true || v === '1'
@@ -106,16 +112,18 @@ routerAdd(
 
       let pessoaNome = shift.pessoaNome
       let statusProfissional = shift.statusProfissional || 'atribuído'
-      if (!pessoaNome || pessoaNome.trim() === '') {
+      if (!pessoaNome || String(pessoaNome).trim() === '') {
         pessoaNome = 'sem profissional'
         statusProfissional = 'vago'
       }
 
       let pedidoSubstituicao = ''
       let substituicao = shift.substituicao
-      if (String(substituicao).toLowerCase() === 'true') {
+      if (String(substituicao).trim() === 'true') {
         pedidoSubstituicao = 'PEDIDO DE SUBSTITUICAO'
         substituicao = 'PEDIDO DE SUBSTITUICAO'
+      } else if (String(substituicao).trim() === 'false') {
+        substituicao = 'false'
       }
 
       cleanedShifts.push({
@@ -149,18 +157,31 @@ routerAdd(
     $app.truncateCollection(plantoesCol)
 
     let synced = 0
+    let errors = []
     for (const data of cleanedShifts) {
       const record = new Record(plantoesCol)
       for (const key in data) {
-        if (data[key] !== undefined && data[key] !== null) {
+        if (data[key] !== undefined && data[key] !== null && data[key] !== '') {
           record.set(key, data[key])
         }
       }
-      $app.save(record)
-      synced++
+      try {
+        $app.save(record)
+        synced++
+      } catch (err) {
+        errors.push({ error: err.message, data })
+      }
     }
 
-    return e.json(200, { message: 'Sync complete', syncedShifts: synced })
+    if (errors.length > 0 && synced === 0) {
+      return e.json(400, { error: 'Validation failed for all records', details: errors })
+    }
+
+    return e.json(200, {
+      message: 'Sync complete',
+      syncedShifts: synced,
+      errors: errors.length > 0 ? errors : undefined,
+    })
   },
   $apis.requireAuth(),
 )

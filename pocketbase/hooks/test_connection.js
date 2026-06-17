@@ -38,7 +38,7 @@ routerAdd(
       }
 
       if (resShift.statusCode >= 400) {
-        return e.badRequestError('A API retornou erro. Status: ' + resShift.statusCode)
+        return e.json(400, { error: 'A API retornou erro. Status: ' + resShift.statusCode })
       }
 
       if (!resShift.json || !Array.isArray(resShift.json.plantoes)) {
@@ -49,7 +49,7 @@ routerAdd(
 
       return e.json(200, { success: true })
     } catch (err) {
-      return e.internalServerError('Falha de comunicação (API Unreachable) ou timeout.')
+      return e.json(500, { error: 'Falha de comunicação (API Unreachable) ou timeout.' })
     }
   },
   $apis.requireAuth(),

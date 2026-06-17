@@ -182,34 +182,20 @@ export default function Chat() {
   const handleTestConnection = async () => {
     setIsTesting(true)
     try {
-      const res = await fetch(
-        `${import.meta.env.VITE_POCKETBASE_URL}/backend/v1/doctor-id/test-connection`,
-        {
-          headers: { Authorization: pb.authStore.token },
-        },
-      )
-      const data = await res.json()
-      if (!res.ok) {
-        if (res.status === 401 || res.status === 403) {
-          toast({
-            title: 'Erro de Autenticação',
-            description:
-              'Token DUUID expirado ou inválido. Por favor, atualize o segredo DUUID_TOKEN.',
-            variant: 'destructive',
-          })
-        } else {
-          throw new Error(data.error || 'Falha ao testar conexão.')
-        }
-      } else {
-        toast({
-          title: 'Conexão Bem Sucedida',
-          description: 'A API Doctor ID está acessível e respondendo corretamente.',
-        })
-      }
-    } catch (err: any) {
+      await pb.send('/backend/v1/doctor-id/test-connection', { method: 'GET' })
       toast({
-        title: 'Erro de Conexão',
-        description: err.message,
+        title: 'Conexão Bem Sucedida',
+        description: 'A API Doctor ID está acessível e respondendo corretamente.',
+      })
+    } catch (err: any) {
+      const isAuthError = err.status === 401 || err.status === 403
+      const errMsg = isAuthError
+        ? err.response?.error || 'Token DUUID expirado ou inválido. Atualize o DUUID_TOKEN.'
+        : err.response?.error || err.message || 'Falha ao testar conexão.'
+
+      toast({
+        title: isAuthError ? 'Erro de Autenticação' : 'Erro de Conexão',
+        description: errMsg,
         variant: 'destructive',
       })
     } finally {

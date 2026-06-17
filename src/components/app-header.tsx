@@ -1,15 +1,42 @@
-import { useLocation } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { useLocation, Link } from 'react-router-dom'
 import { SidebarTrigger, useSidebar } from '@/components/ui/sidebar'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Bell } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useProfile } from '@/hooks/use-profile'
+import { useAuth } from '@/hooks/use-auth'
+import pb from '@/lib/pocketbase/client'
+import { useRealtime } from '@/hooks/use-realtime'
 
 export function AppHeader() {
   const location = useLocation()
   const { isMobile } = useSidebar()
   const { profile } = useProfile()
+  const { user } = useAuth()
+  const [unreadCount, setUnreadCount] = useState(0)
+
+  const loadUnread = async () => {
+    if (!user?.id) return
+    try {
+      const records = await pb.collection('alerts').getList(1, 1, {
+        filter: `lido = false && user_id = "${user.id}"`,
+        $autoCancel: false,
+      })
+      setUnreadCount(records.totalItems)
+    } catch {
+      /* intentionally ignored */
+    }
+  }
+
+  useEffect(() => {
+    loadUnread()
+  }, [user])
+
+  useRealtime('alerts', () => {
+    loadUnread()
+  })
 
   const getPageTitle = () => {
     if (location.pathname.includes('/dashboard')) return 'Dashboard'
@@ -33,10 +60,16 @@ export function AppHeader() {
         <Button
           variant="ghost"
           size="icon"
-          className="h-11 w-11 relative text-muted-foreground hover:text-primary"
+          className="h-11 w-11 relative text-muted-foreground hover:text-primary min-h-[44px] min-w-[44px]"
+          asChild
+          aria-label="Notificações de alertas"
         >
-          <Bell className="h-5 w-5" />
-          <span className="absolute top-2.5 right-2.5 h-2 w-2 rounded-full bg-destructive border-2 border-white" />
+          <Link to="/alerts">
+            <Bell className="h-5 w-5" />
+            {unreadCount > 0 && (
+              <span className="absolute top-2.5 right-2.5 h-2 w-2 rounded-full bg-destructive border-2 border-white" />
+            )}
+          </Link>
         </Button>
         <Avatar
           className="h-10 w-10 border-2 border-border cursor-pointer transition-transform hover:scale-105"

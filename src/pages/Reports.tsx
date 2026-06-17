@@ -16,6 +16,8 @@ import { Lightbulb, ChevronLeft, ChevronRight, Download, Filter } from 'lucide-r
 import pb from '@/lib/pocketbase/client'
 import { useToast } from '@/components/ui/use-toast'
 import { useAuth } from '@/hooks/use-auth'
+import { cn } from '@/lib/utils'
+import { useRealtime } from '@/hooks/use-realtime'
 
 export default function Reports() {
   const { user } = useAuth()
@@ -23,26 +25,34 @@ export default function Reports() {
   const [activeTab, setActiveTab] = useState('vagas')
   const [data, setData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(false)
+
+  const fetchData = async (showLoading = true) => {
+    if (!user) return
+    if (showLoading) setLoading(true)
+    setError(false)
+    try {
+      const res = await pb.send(`/backend/v1/relatorios?type=${activeTab}`, { method: 'GET' })
+      setData(res)
+    } catch (err) {
+      setError(true)
+      toast({
+        title: 'Erro ao buscar relatórios',
+        description: 'Não foi possível contatar o serviço de dados.',
+        variant: 'destructive',
+      })
+    } finally {
+      if (showLoading) setLoading(false)
+    }
+  }
 
   useEffect(() => {
-    const fetchData = async () => {
-      if (!user) return
-      setLoading(true)
-      try {
-        const res = await pb.send(`/backend/v1/relatorios?type=${activeTab}`, { method: 'GET' })
-        setData(res)
-      } catch (err) {
-        toast({
-          title: 'Erro ao buscar relatórios',
-          description: 'Não foi possível contatar o serviço de dados.',
-          variant: 'destructive',
-        })
-      } finally {
-        setLoading(false)
-      }
-    }
     fetchData()
   }, [activeTab, user])
+
+  useRealtime('shifts', () => {
+    fetchData(false)
+  })
 
   const renderPagination = () => (
     <div className="flex items-center justify-between px-4 py-3 border-t bg-card rounded-b-lg">
@@ -137,6 +147,18 @@ export default function Reports() {
               <Skeleton className="h-12 w-full" />
               <Skeleton className="h-64 w-full" />
             </div>
+          ) : error ? (
+            <Card className="border-red-200 bg-red-50/50 shadow-sm">
+              <CardContent className="p-8 flex flex-col items-center justify-center text-center">
+                <p className="text-red-600 font-medium mb-2">Não foi possível carregar os dados</p>
+                <p className="text-sm text-red-500/80 mb-4">
+                  Verifique sua conexão ou tente novamente mais tarde.
+                </p>
+                <Button variant="outline" onClick={() => fetchData()}>
+                  Tentar Novamente
+                </Button>
+              </CardContent>
+            </Card>
           ) : (
             <>
               <TabsContent value="vagas" className="m-0">
@@ -148,7 +170,7 @@ export default function Reports() {
                         Acompanhe vagas críticas para preenchimento imediato.
                       </CardDescription>
                     </div>
-                    <Button variant="secondary" size="sm" className="min-h-[44px]">
+                    <Button variant="secondary" size="sm" className="min-h-[44px] hidden sm:flex">
                       <Filter className="h-4 w-4 mr-2" /> Filtros
                     </Button>
                   </CardHeader>
@@ -175,6 +197,16 @@ export default function Reports() {
                             </TableCell>
                           </TableRow>
                         ))}
+                        {(!data?.items || data.items.length === 0) && (
+                          <TableRow>
+                            <TableCell
+                              colSpan={5}
+                              className="text-center text-muted-foreground py-8"
+                            >
+                              Nenhuma vaga descoberta encontrada.
+                            </TableCell>
+                          </TableRow>
+                        )}
                       </TableBody>
                     </Table>
 
@@ -205,8 +237,13 @@ export default function Reports() {
                           </div>
                         </div>
                       ))}
+                      {(!data?.items || data.items.length === 0) && (
+                        <div className="text-center text-muted-foreground py-8">
+                          Nenhuma vaga descoberta encontrada.
+                        </div>
+                      )}
                     </div>
-                    {renderPagination()}
+                    {data?.items?.length > 0 && renderPagination()}
                   </CardContent>
                 </Card>
               </TabsContent>
@@ -215,55 +252,63 @@ export default function Reports() {
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   <Card className="border shadow-sm">
                     <CardHeader className="bg-muted/10 border-b">
-                      <CardTitle className="text-lg">Tempo de Preenchimento (Horas)</CardTitle>
+                      <CardTitle className="text-lg">
+                        Taxa de Preenchimento Geral (Mês Atual)
+                      </CardTitle>
                     </CardHeader>
-                    <CardContent className="p-0">
-                      <Table className="[&_th]:bg-muted/50 [&_tr:nth-child(even)]:bg-muted/20">
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Especialidade</TableHead>
-                            <TableHead className="text-right">Média</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {data?.tempoPreenchimento?.map((item: any, i: number) => (
-                            <TableRow key={i}>
-                              <TableCell className="font-medium">{item.especialidade}</TableCell>
-                              <TableCell className="text-right">{item.horas}h</TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
+                    <CardContent className="p-6 flex flex-col items-center justify-center min-h-[200px]">
+                      <div className="text-5xl font-bold text-primary mb-2">
+                        {data?.taxaGeral ?? 0}%
+                      </div>
+                      <p className="text-muted-foreground text-center">
+                        Plantões com médico alocado em relação ao total
+                      </p>
                     </CardContent>
                   </Card>
 
                   <Card className="border shadow-sm">
                     <CardHeader className="bg-muted/10 border-b">
-                      <CardTitle className="text-lg">Taxa de Substituição Alta</CardTitle>
+                      <CardTitle className="text-lg">Taxa de Preenchimento por Local</CardTitle>
                     </CardHeader>
                     <CardContent className="p-0">
                       <Table className="[&_th]:bg-muted/50 [&_tr:nth-child(even)]:bg-muted/20">
                         <TableHeader>
                           <TableRow>
-                            <TableHead>Profissional</TableHead>
+                            <TableHead>Local</TableHead>
+                            <TableHead className="text-right">Total Plantões</TableHead>
                             <TableHead className="text-right">Taxa</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {data?.substituicoes?.map((item: any, i: number) => (
+                          {data?.locais?.map((item: any, i: number) => (
                             <TableRow key={i}>
-                              <TableCell className="font-medium">{item.medico}</TableCell>
+                              <TableCell className="font-medium">{item.local}</TableCell>
+                              <TableCell className="text-right">{item.total}</TableCell>
                               <TableCell className="text-right">
                                 <span
                                   className={cn(
-                                    item.status === 'Alto' && 'text-red-600 font-semibold',
+                                    item.taxa < 80 && 'text-red-600 font-semibold',
+                                    item.taxa >= 80 &&
+                                      item.taxa < 100 &&
+                                      'text-yellow-600 font-semibold',
+                                    item.taxa === 100 && 'text-green-600 font-semibold',
                                   )}
                                 >
-                                  {item.taxa}
+                                  {item.taxa}%
                                 </span>
                               </TableCell>
                             </TableRow>
                           ))}
+                          {(!data?.locais || data.locais.length === 0) && (
+                            <TableRow>
+                              <TableCell
+                                colSpan={3}
+                                className="text-center text-muted-foreground py-8"
+                              >
+                                Nenhum dado de produtividade encontrado para o período.
+                              </TableCell>
+                            </TableRow>
+                          )}
                         </TableBody>
                       </Table>
                     </CardContent>
@@ -315,6 +360,16 @@ export default function Reports() {
                             </TableCell>
                           </TableRow>
                         ))}
+                        {(!data?.items || data.items.length === 0) && (
+                          <TableRow>
+                            <TableCell
+                              colSpan={3}
+                              className="text-center text-muted-foreground py-8"
+                            >
+                              Nenhum risco operacional detectado para os próximos 7 dias.
+                            </TableCell>
+                          </TableRow>
+                        )}
                       </TableBody>
                     </Table>
 
@@ -334,6 +389,11 @@ export default function Reports() {
                           <p className="text-sm text-muted-foreground">{item.descricao}</p>
                         </div>
                       ))}
+                      {(!data?.items || data.items.length === 0) && (
+                        <div className="text-center text-muted-foreground py-8">
+                          Nenhum risco operacional detectado para os próximos 7 dias.
+                        </div>
+                      )}
                     </div>
                   </CardContent>
                 </Card>

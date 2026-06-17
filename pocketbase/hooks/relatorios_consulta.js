@@ -8,107 +8,132 @@ routerAdd(
     const type = e.request.url.query().get('type') || 'vagas'
 
     if (type === 'vagas') {
-      return e.json(200, {
-        items: [
-          {
-            id: 1,
-            data: '2026-06-20',
-            instituicao: 'Hospital São Lucas',
-            especialidade: 'Cardiologia',
-            horario: '08:00 - 20:00',
-            duracao: '12h',
-            turno: 'Diurno',
-            status: 'Crítica',
-          },
-          {
-            id: 2,
-            data: '2026-06-21',
-            instituicao: 'Clínica Sul',
-            especialidade: 'Pediatria',
-            horario: '20:00 - 08:00',
-            duracao: '12h',
-            turno: 'Noturno',
-            status: 'Aberta',
-          },
-          {
-            id: 3,
-            data: '2026-06-22',
-            instituicao: 'Hospital Norte',
-            especialidade: 'Ortopedia',
-            horario: '19:00 - 07:00',
-            duracao: '12h',
-            turno: 'Noturno',
-            status: 'Em negociação',
-          },
-          {
-            id: 4,
-            data: '2026-06-23',
-            instituicao: 'Hospital São Lucas',
-            especialidade: 'Neurologia',
-            horario: '08:00 - 14:00',
-            duracao: '6h',
-            turno: 'Diurno',
-            status: 'Aberta',
-          },
-        ],
-        total: 4,
+      const records = $app.findRecordsByFilter('shifts', "doctor_name = ''", 'start_time', 100, 0)
+
+      const items = records.map((r) => {
+        let start = new Date()
+        let end = new Date()
+        try {
+          start = new Date(r.getString('start_time'))
+          end = new Date(r.getString('end_time'))
+        } catch (_) {}
+
+        const duracaoH = Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60)) || 0
+        const isNoite = start.getHours() >= 18 || start.getHours() < 6
+
+        return {
+          id: r.id,
+          data: start.toISOString().split('T')[0],
+          instituicao: r.getString('location') || 'Não informada',
+          especialidade: 'Não especificada',
+          horario: `${start.getHours().toString().padStart(2, '0')}:${start.getMinutes().toString().padStart(2, '0')} - ${end.getHours().toString().padStart(2, '0')}:${end.getMinutes().toString().padStart(2, '0')}`,
+          duracao: `${duracaoH}h`,
+          turno: isNoite ? 'Noturno' : 'Diurno',
+          status: r.getString('status') || 'Aberta',
+        }
       })
+
+      return e.json(200, { items, total: items.length })
     }
 
     if (type === 'produtividade') {
-      return e.json(200, {
-        tempoPreenchimento: [
-          { especialidade: 'Cardiologia', horas: 12 },
-          { especialidade: 'Pediatria', horas: 8 },
-          { especialidade: 'Ortopedia', horas: 24 },
-          { especialidade: 'Neurologia', horas: 16 },
-        ],
-        substituicoes: [
-          { medico: 'Dr. João Silva', taxa: '15%', status: 'Alto' },
-          { medico: 'Dra. Maria Souza', taxa: '8%', status: 'Normal' },
-          { medico: 'Dr. Roberto Costa', taxa: '4%', status: 'Normal' },
-        ],
+      const now = new Date()
+      const firstDay = new Date(now.getFullYear(), now.getMonth(), 1)
+        .toISOString()
+        .replace('T', ' ')
+
+      const allShifts = $app.findRecordsByFilter(
+        'shifts',
+        `start_time >= '${firstDay}'`,
+        '-start_time',
+        1000,
+        0,
+      )
+
+      let total = allShifts.length
+      let filled = 0
+      const byLocation = {}
+
+      allShifts.forEach((r) => {
+        const loc = r.getString('location') || 'Não informada'
+        const isFilled = r.getString('doctor_name') !== ''
+
+        if (!byLocation[loc]) byLocation[loc] = { total: 0, filled: 0 }
+        byLocation[loc].total++
+        if (isFilled) {
+          filled++
+          byLocation[loc].filled++
+        }
       })
+
+      const taxaGeral = total > 0 ? Math.round((filled / total) * 100) : 0
+
+      const locais = Object.keys(byLocation)
+        .map((loc) => {
+          const t = byLocation[loc].total
+          const f = byLocation[loc].filled
+          return {
+            local: loc,
+            taxa: t > 0 ? Math.round((f / t) * 100) : 0,
+            total: t,
+          }
+        })
+        .sort((a, b) => b.taxa - a.taxa)
+
+      return e.json(200, { taxaGeral, locais })
     }
 
     if (type === 'riscos') {
-      const riscos = [
-        {
-          id: 1,
-          data: '2026-06-22',
-          descricao: 'Furo detectado na escala da UTI (falta apenas 48h)',
-          criticidade: 'alta',
-        },
-        {
-          id: 2,
-          data: '2026-06-25',
-          descricao: '3 médicos do plantão noturno atingiram limite de horas extras',
-          criticidade: 'media',
-        },
-        {
-          id: 3,
-          data: '2026-06-27',
-          descricao: 'Baixa adesão voluntária aos plantões de final de semana na pediatria',
-          criticidade: 'baixa',
-        },
-      ]
+      const now = new Date()
+      const in48h = new Date(now.getTime() + 48 * 60 * 60 * 1000)
+      const nowStr = now.toISOString().replace('T', ' ')
+      const in48hStr = in48h.toISOString().replace('T', ' ')
+
+      const risksRecords = $app.findRecordsByFilter(
+        'shifts',
+        `doctor_name = '' && start_time >= '${nowStr}' && start_time <= '${in48hStr}'`,
+        'start_time',
+        50,
+        0,
+      )
+
+      const riscos = risksRecords.map((r) => {
+        let start = new Date()
+        try {
+          start = new Date(r.getString('start_time'))
+        } catch (_) {}
+        const hoursLeft = (start.getTime() - now.getTime()) / (1000 * 60 * 60)
+        return {
+          id: r.id,
+          data: start.toISOString().split('T')[0],
+          descricao: `Plantão descoberto em ${r.getString('location') || 'Local não informado'} iniciando em ${Math.round(hoursLeft)} horas`,
+          criticidade: hoursLeft <= 24 ? 'alta' : 'media',
+        }
+      })
 
       let recomendacao = 'Nenhuma recomendação gerada.'
       try {
-        const prompt =
-          'Como gestor experiente, forneça uma diretriz executiva curta (no máximo 3 linhas) com ações imediatas para mitigar os seguintes riscos de escalas hospitalares: ' +
-          JSON.stringify(riscos)
-        const reply = $ai.chat({
-          model: 'fast',
-          messages: [
-            {
-              role: 'system',
-              content: 'Você é um consultor executivo focado em gestão e qualidade na saúde.',
-            },
-            { role: 'user', content: prompt },
-          ],
-        })
-        recomendacao = reply.choices[0].message.content
+        const totalRisks = riscos.length
+        const totalHigh = riscos.filter((r) => r.criticidade === 'alta').length
+
+        if (totalRisks > 0) {
+          const prompt = `Como gestor experiente, forneça uma diretriz executiva curta (no máximo 3 linhas) com ações imediatas para mitigar os seguintes riscos operacionais de escalas hospitalares: Temos ${totalRisks} plantões descobertos nas próximas 48h, sendo ${totalHigh} deles críticos (nas próximas 24h).`
+          const reply = $ai.chat({
+            model: 'fast',
+            messages: [
+              {
+                role: 'system',
+                content:
+                  'Você é um consultor executivo focado em gestão e qualidade na saúde. Seja direto e proponha soluções urgentes.',
+              },
+              { role: 'user', content: prompt },
+            ],
+          })
+          recomendacao = reply.choices[0].message.content
+        } else {
+          recomendacao =
+            'As escalas para as próximas 48h estão cobertas. Mantenha o monitoramento padrão.'
+        }
       } catch (err) {
         $app.logger().error('AI recommendation error', 'err', err.message)
         recomendacao =

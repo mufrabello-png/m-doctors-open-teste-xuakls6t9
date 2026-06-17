@@ -184,13 +184,15 @@ export default function Chat() {
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}))
 
-        // Não re-tentar erros do cliente
-        if (res.status === 400 || res.status === 401) {
-          throw new Error(errorData.error || 'Erro de autenticação ou requisição inválida.')
+        // Não re-tentar erros do cliente (ex: autenticação, chaves inválidas, rate limits da OpenAI)
+        if (res.status === 400 || res.status === 401 || res.status === 403 || res.status === 429) {
+          throw new Error(
+            errorData.error || 'Erro de autenticação, limite de uso ou requisição inválida.',
+          )
         }
 
-        // Retry para OpenAI 503 Errors
-        if (res.status === 503) {
+        // Retry para OpenAI 502, 503, etc Errors
+        if (res.status >= 500 && res.status <= 504) {
           if (retryCount < MAX_RETRIES) {
             await new Promise((resolve) => setTimeout(resolve, RETRY_DELAYS[retryCount]))
             if (signal.aborted) throw new Error('Aborted')

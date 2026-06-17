@@ -9,106 +9,81 @@ routerAdd(
 
     const message = body.message.trim()
 
-    // 1. Extração de parâmetros usando AI Gateway
-    let params = {}
+    // 1. Obter a chave de API da OpenAI
+    const openAiKey = $secrets.get('OPEN_AI')
+    if (!openAiKey) {
+      return e.internalServerError(
+        'A chave da API da OpenAI (OPEN_AI) não está configurada nos segredos do sistema.',
+      )
+    }
+
+    // 2. Buscar dados reais das escalas para contexto
+    let shiftsContext = 'Nenhuma escala encontrada no sistema.'
     try {
-      const extractRes = $ai.chat({
-        model: 'fast',
-        messages: [
-          {
-            role: 'system',
-            content:
-              "Você é um extrator de parâmetros de agendamento. Retorne APENAS um objeto JSON com as chaves: 'periodo', 'especialidade', 'instituicao', 'tipo_escala'. Se não identificar algum, o valor deve ser null. Não inclua nenhum outro texto.",
-          },
-          { role: 'user', content: message },
-        ],
-      })
-      const text = extractRes.choices[0].message.content
-      const jsonMatch = text.match(/\{[\s\S]*\}/)
-      if (jsonMatch) {
-        params = JSON.parse(jsonMatch[0])
+      // Buscar até 100 registros de escalas não canceladas para usar de contexto
+      const shifts = $app.findRecordsByFilter(
+        'shifts',
+        "status != 'cancelled'",
+        '-start_time',
+        100,
+        0,
+      )
+      if (shifts && shifts.length > 0) {
+        shiftsContext = shifts
+          .map((s) => {
+            return `- Médico: ${s.getString('doctor_name')} | Local: ${s.getString('location')} | Início: ${s.getString('start_time')} | Fim: ${s.getString('end_time')} | Status: ${s.getString('status')}`
+          })
+          .join('\n')
       }
     } catch (err) {
-      if (err.status === 503) {
-        return e.json(503, { error: 'Serviço AI temporariamente indisponível.' })
-      }
-      // Falhas de extração são toleradas para seguir sem filtros restritos
+      $app.logger().error('Erro ao buscar shifts para contexto', 'error', err.message)
     }
 
-    // 2. Integração Segura com API DoctorID via Secrets
-    const urlBase =
-      $secrets.get('URL_BASE_DOCTORID') ||
-      $secrets.get('ENDPOINT_IDDOCTORS') ||
-      'https://www.doctorid.com.br/api/shiftListing'
-    const token = $secrets.get('TOKEN_DUUID') || $secrets.get('DOCTORID_API_TOKEN') || ''
-
-    let apiData = null
-    if (!token) {
-      return e.badRequestError('Token da API DoctorID não configurado nos segredos (TOKEN_DUUID).')
-    }
-
+    // 3. Comunicação Direta com OpenAI
+    let answer = ''
     try {
-      const query = new URLSearchParams()
-      if (params.periodo) query.append('periodo', params.periodo)
-      if (params.especialidade) query.append('especialidade', params.especialidade)
-      if (params.instituicao) query.append('instituicao', params.instituicao)
-      if (params.tipo_escala) query.append('tipo_escala', params.tipo_escala)
-
-      const qs = query.toString()
-      const url = urlBase + (qs ? '?' + qs : '')
-
       const res = $http.send({
-        url: url,
-        method: 'GET',
+        url: 'https://api.openai.com/v1/chat/completions',
+        method: 'POST',
         headers: {
-          Authorization: 'Bearer ' + token,
+          Authorization: 'Bearer ' + openAiKey,
           'Content-Type': 'application/json',
         },
-        timeout: 15,
+        body: JSON.stringify({
+          model: 'gpt-4o-mini',
+          messages: [
+            {
+              role: 'system',
+              content:
+                "Você é um assistente de escalas médicas inteligente. Responda à pergunta do usuário de forma clara, objetiva e em português, baseando-se EXCLUSIVAMENTE nos dados das escalas fornecidos abaixo. Não invente ou presuma informações. Se não souber ou a informação não estiver nas escalas, diga claramente.\n\nREGRAS DE FORMATAÇÃO:\n- Coloque números, datas, e horários em **negrito**.\n- Use listas (- ou *) para enumerar múltiplos itens.\n- Se houver algum erro grave nos dados, inicie um parágrafo exatamente com a palavra 'ALERTA:'.\n\nDADOS REAIS DAS ESCALAS:\n" +
+                shiftsContext,
+            },
+            {
+              role: 'user',
+              content: message,
+            },
+          ],
+        }),
+        timeout: 30,
       })
 
       if (res.statusCode >= 200 && res.statusCode < 300) {
-        apiData = res.json
+        answer =
+          res.json?.choices?.[0]?.message?.content ||
+          'Não foi possível gerar uma resposta coerente com os dados.'
       } else {
-        // Retornar 400/401 direto para a UI não efetuar retry
-        if (res.statusCode === 400 || res.statusCode === 401) {
-          return e.json(res.statusCode, {
-            error: 'Erro de autenticação ou requisição inválida na API DoctorID.',
-          })
+        let errorMsg = 'Erro na comunicação com a API da OpenAI.'
+        if (res.json?.error?.message) {
+          errorMsg = res.json.error.message
         }
-        apiData = { erro: 'A API DoctorID retornou o status ' + res.statusCode }
+        return e.json(res.statusCode, { error: errorMsg })
       }
     } catch (err) {
-      $app.logger().error('DoctorID API request failed', 'error', err.message)
-      apiData = { erro: 'Falha de comunicação ou timeout na API DoctorID.' }
+      $app.logger().error('OpenAI API request failed', 'error', err.message)
+      return e.internalServerError('Falha de comunicação ou timeout na API da OpenAI.')
     }
 
-    // 3. Orquestração e Resposta Final (AI Gateway)
-    let answer = ''
-    try {
-      const answerRes = $ai.chat({
-        model: 'fast',
-        messages: [
-          {
-            role: 'system',
-            content:
-              "Você é um assistente de escalas médicas do DoctorID. Formule uma resposta em português de forma clara e objetiva respondendo à pergunta do usuário, baseando-se EXCLUSIVAMENTE nos dados da API fornecidos.\n\nREGRAS DE FORMATAÇÃO:\n- Coloque números, datas, e horários em **negrito**.\n- Use listas (- ou *) para enumerar múltiplos itens.\n- Se houver algum erro grave nos dados, inicie um parágrafo exatamente com a palavra 'ALERTA:'.",
-          },
-          {
-            role: 'user',
-            content: `Pergunta do usuário: "${message}"\n\nDados da API: ${JSON.stringify(apiData)}`,
-          },
-        ],
-      })
-      answer = answerRes.choices[0].message.content
-    } catch (err) {
-      if (err.status === 503) {
-        return e.json(503, { error: 'Serviço AI temporariamente indisponível.' })
-      }
-      answer = 'Desculpe, ocorreu um erro ao gerar a resposta baseada nos dados encontrados.'
-    }
-
-    // 4. Salvar log de histórico
+    // 4. Salvar log de histórico na base historico_consultas
     try {
       const histCol = $app.findCollectionByNameOrId('historico_consultas')
       const record = new Record(histCol)
@@ -120,6 +95,7 @@ routerAdd(
       $app.logger().error('Erro ao salvar historico_consultas', 'erro', err.message)
     }
 
+    // 5. Retorno ao frontend
     return e.json(200, {
       content: answer,
     })

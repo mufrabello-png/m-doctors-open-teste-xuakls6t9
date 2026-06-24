@@ -6,7 +6,9 @@ routerAdd(
     try {
       const conf = $app.findFirstRecordByData('configuracoes_sistema', 'chave', 'DUUID_TOKEN')
       token = conf.getString('valor')
-    } catch (_) {
+    } catch (_) {}
+
+    if (!token) {
       token = $secrets.get('DUUID_TOKEN') || ''
     }
 
@@ -44,19 +46,21 @@ routerAdd(
 
       if (res.statusCode >= 400) {
         $app.logger().error('Doctorid API error', 'status', res.statusCode)
-        return e.json(res.statusCode, { error: 'Failed to fetch shifts from Doctorid API' })
+        return e.json(502, { error: 'Failed to fetch shifts from Doctorid API' })
       }
 
-      if (!res.json || !Array.isArray(res.json.plantoes)) {
+      const plantoes = res.json?.plantoes || []
+
+      if (!Array.isArray(plantoes)) {
         return e.json(502, {
           error: 'Formato de resposta inválido da API Doctor ID. Chave plantoes não encontrada.',
         })
       }
 
-      return e.json(200, res.json.plantoes)
+      return e.json(200, plantoes)
     } catch (err) {
       $app.logger().error('Doctorid API transport error', 'error', err.message)
-      return e.internalServerError('Failed to communicate with Doctorid API')
+      return e.json(502, { error: 'Failed to communicate with Doctorid API' })
     }
   },
   $apis.requireAuth(),

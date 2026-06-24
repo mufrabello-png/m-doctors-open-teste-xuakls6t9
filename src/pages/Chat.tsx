@@ -166,9 +166,11 @@ export default function Chat() {
       })
     } catch (err: any) {
       const isAuthError = err.status === 401 || err.status === 403
-      const errMsg = isAuthError
-        ? 'Token DUUID expirado ou inválido. Atualize o DUUID_TOKEN.'
-        : err.response?.error || err.message || 'Não foi possível sincronizar os dados.'
+      const errMsg =
+        err.response?.error ||
+        (isAuthError
+          ? 'Token DUUID expirado ou inválido. Atualize o DUUID_TOKEN.'
+          : err.message || 'Não foi possível sincronizar os dados.')
       toast({
         title: isAuthError ? 'Autenticação Necessária' : 'Erro na sincronização',
         description: errMsg,
@@ -189,9 +191,11 @@ export default function Chat() {
       })
     } catch (err: any) {
       const isAuthError = err.status === 401 || err.status === 403
-      const errMsg = isAuthError
-        ? err.response?.error || 'Token DUUID expirado ou inválido. Atualize o DUUID_TOKEN.'
-        : err.response?.error || err.message || 'Falha ao testar conexão.'
+      const errMsg =
+        err.response?.error ||
+        (isAuthError
+          ? 'Token DUUID expirado ou inválido. Atualize o DUUID_TOKEN.'
+          : err.message || 'Falha ao testar conexão.')
 
       toast({
         title: isAuthError ? 'Erro de Autenticação' : 'Erro de Conexão',

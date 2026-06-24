@@ -6,12 +6,14 @@ routerAdd(
     try {
       const conf = $app.findFirstRecordByData('configuracoes_sistema', 'chave', 'DUUID_TOKEN')
       token = conf.getString('valor')
-    } catch (_) {
+    } catch (_) {}
+
+    if (!token) {
       token = $secrets.get('DUUID_TOKEN') || ''
     }
 
     if (!token) {
-      return e.json(401, { error: 'DUUID_TOKEN secret não configurado.' })
+      return e.json(401, { error: 'DUUID_TOKEN não configurado.' })
     }
 
     const spTime = new Date(new Date().getTime() - 3 * 3600 * 1000)
@@ -47,11 +49,13 @@ routerAdd(
         })
       }
 
-      if (!resShift.json || !Array.isArray(resShift.json.plantoes)) {
+      shiftsData = resShift.json?.plantoes || []
+
+      if (!Array.isArray(shiftsData)) {
         $app
           .logger()
           .error(
-            'plantoes key missing from API response',
+            'plantoes key missing or invalid from API response',
             'body',
             resShift.body ? new TextDecoder().decode(resShift.body) : '',
           )
@@ -59,8 +63,6 @@ routerAdd(
           error: 'Formato de resposta inválido da API Doctor ID. Chave plantoes não encontrada.',
         })
       }
-
-      shiftsData = resShift.json.plantoes
     } catch (err) {
       return e.json(502, { error: 'Falha de comunicação com a API Doctor ID: ' + err.message })
     }
@@ -81,7 +83,7 @@ routerAdd(
       if (!datePart.includes('/')) return ''
       const [day, monthStr, year] = datePart.split('/')
       if (year && monthStr && day) {
-        return `${year}-${monthStr}-${day} ${timePart}.000Z`
+        return `${year}-${monthStr}-${day}T${timePart}.000Z`
       }
       return ''
     }

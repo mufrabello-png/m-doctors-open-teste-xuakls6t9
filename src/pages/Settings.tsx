@@ -35,7 +35,7 @@ export default function Settings() {
       const res = await pb.send('/backend/v1/doctor-id/test-connection', { method: 'GET' })
       toast({
         title: 'Conexão bem-sucedida',
-        description: `Connection successful: ${res.count} hospitals found`,
+        description: `Conexão bem-sucedida: ${res.count ?? 0} plantões encontrados.`,
       })
     } catch (err: any) {
       toast({

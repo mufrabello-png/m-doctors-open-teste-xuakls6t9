@@ -6,12 +6,14 @@ routerAdd(
     try {
       const conf = $app.findFirstRecordByData('configuracoes_sistema', 'chave', 'DUUID_TOKEN')
       token = conf.getString('valor')
-    } catch (_) {
+    } catch (_) {}
+
+    if (!token) {
       token = $secrets.get('DUUID_TOKEN') || ''
     }
 
     if (!token) {
-      return e.json(401, { error: 'Token DUUID não configurado.' })
+      return e.json(401, { error: 'DUUID_TOKEN não configurado.' })
     }
 
     const spTime = new Date(new Date().getTime() - 3 * 3600 * 1000)
@@ -38,18 +40,20 @@ routerAdd(
       }
 
       if (resShift.statusCode >= 400) {
-        return e.json(400, { error: 'A API retornou erro. Status: ' + resShift.statusCode })
+        return e.json(502, { error: 'A API retornou erro. Status: ' + resShift.statusCode })
       }
 
-      if (!resShift.json || !Array.isArray(resShift.json.plantoes)) {
+      const plantoes = resShift.json?.plantoes || []
+
+      if (!Array.isArray(plantoes)) {
         return e.json(502, {
           error: 'Formato de resposta inválido. Chave plantoes não encontrada.',
         })
       }
 
-      return e.json(200, { success: true })
+      return e.json(200, { success: true, count: plantoes.length })
     } catch (err) {
-      return e.json(500, { error: 'Falha de comunicação (API Unreachable) ou timeout.' })
+      return e.json(502, { error: 'Falha de comunicação (API Unreachable) ou timeout.' })
     }
   },
   $apis.requireAuth(),

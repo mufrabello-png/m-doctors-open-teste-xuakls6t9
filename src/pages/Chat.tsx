@@ -207,11 +207,13 @@ export default function Chat() {
     }
   }
 
+  const [toolStatus, setToolStatus] = useState<string | null>(null)
+
   const fetchWithRetry = async (
     text: string,
     signal: AbortSignal,
     retryCount = 0,
-  ): Promise<any> => {
+  ): Promise<string> => {
     try {
       const res = await fetch(
         `${import.meta.env.VITE_POCKETBASE_URL}/backend/v1/chat-orquestrador`,
@@ -226,14 +228,12 @@ export default function Chat() {
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}))
 
-        // Não re-tentar erros do cliente (ex: autenticação, chaves inválidas, rate limits da OpenAI)
         if (res.status === 400 || res.status === 401 || res.status === 403 || res.status === 429) {
           throw new Error(
             errorData.error || 'Erro de autenticação, limite de uso ou requisição inválida.',
           )
         }
 
-        // Retry para OpenAI 502, 503, etc Errors
         if (res.status >= 500 && res.status <= 504) {
           if (retryCount < MAX_RETRIES) {
             await new Promise((resolve) => setTimeout(resolve, RETRY_DELAYS[retryCount]))
@@ -248,7 +248,47 @@ export default function Chat() {
         )
       }
 
-      return res.json()
+      const reader = res.body?.getReader()
+      if (!reader) throw new Error('Failed to read response stream')
+      const decoder = new TextDecoder()
+      let answer = ''
+      let buffer = ''
+      let finalError = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        const parts = buffer.split('\n\n')
+        buffer = parts.pop() || ''
+
+        for (const part of parts) {
+          const lines = part.split('\n')
+          let event = 'message'
+          let data = ''
+          for (const line of lines) {
+            if (line.startsWith('event: ')) event = line.slice(7).trim()
+            else if (line.startsWith('data: ')) data = line.slice(6).trim()
+          }
+          if (data) {
+            try {
+              const parsed = JSON.parse(data)
+              if (event === 'status') {
+                setToolStatus(parsed.message)
+              } else if (event === 'done') {
+                answer = parsed.content
+              } else if (event === 'error') {
+                finalError = parsed.error || 'Erro no processamento'
+              }
+            } catch {
+              /* intentionally ignored */
+            }
+          }
+        }
+      }
+
+      if (finalError) throw new Error(finalError)
+      return answer
     } catch (err: any) {
       if (err.name === 'TypeError' || err.message === 'Failed to fetch') {
         if (retryCount < MAX_RETRIES) {
@@ -275,6 +315,7 @@ export default function Chat() {
 
     setInput('')
     setIsLoading(true)
+    setToolStatus(null)
 
     const userMsgId = Date.now().toString()
     const userMsg: DisplayMessage = {
@@ -284,19 +325,18 @@ export default function Chat() {
       created: new Date().toISOString(),
     }
 
-    // Remove eventuais mensagens de erro anteriores para manter limpo
     setMessages((prev) => [...prev.filter((m) => m.role !== 'error'), userMsg])
 
     const controller = new AbortController()
     abortControllerRef.current = controller
 
     try {
-      const data = await fetchWithRetry(text, controller.signal)
+      const answer = await fetchWithRetry(text, controller.signal)
 
       const assistantMsg: DisplayMessage = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: data.content,
+        content: answer || 'Não foi possível gerar uma resposta.',
         created: new Date().toISOString(),
       }
 
@@ -314,6 +354,7 @@ export default function Chat() {
       setMessages((prev) => [...prev, errorMsg])
     } finally {
       setIsLoading(false)
+      setToolStatus(null)
       abortControllerRef.current = null
     }
   }
@@ -485,19 +526,27 @@ export default function Chat() {
                 </AvatarFallback>
               </Avatar>
               <div className="flex flex-col gap-1 items-start">
-                <div className="bg-muted text-foreground rounded-2xl rounded-tl-sm border border-border/50 px-4 py-4 flex items-center gap-1.5 h-11">
-                  <span
-                    className="w-2 h-2 bg-muted-foreground/40 rounded-full animate-bounce"
-                    style={{ animationDelay: '0ms' }}
-                  />
-                  <span
-                    className="w-2 h-2 bg-muted-foreground/40 rounded-full animate-bounce"
-                    style={{ animationDelay: '150ms' }}
-                  />
-                  <span
-                    className="w-2 h-2 bg-muted-foreground/40 rounded-full animate-bounce"
-                    style={{ animationDelay: '300ms' }}
-                  />
+                <div className="bg-muted text-foreground rounded-2xl rounded-tl-sm border border-border/50 px-4 py-3 flex flex-col gap-2 min-h-11">
+                  <div className="flex items-center gap-1.5 h-5">
+                    <span
+                      className="w-2 h-2 bg-muted-foreground/40 rounded-full animate-bounce"
+                      style={{ animationDelay: '0ms' }}
+                    />
+                    <span
+                      className="w-2 h-2 bg-muted-foreground/40 rounded-full animate-bounce"
+                      style={{ animationDelay: '150ms' }}
+                    />
+                    <span
+                      className="w-2 h-2 bg-muted-foreground/40 rounded-full animate-bounce"
+                      style={{ animationDelay: '300ms' }}
+                    />
+                  </div>
+                  {toolStatus && (
+                    <span className="text-xs text-muted-foreground italic flex items-center gap-1">
+                      <RefreshCw className="w-3 h-3 animate-spin" />
+                      {toolStatus}
+                    </span>
+                  )}
                 </div>
               </div>
             </div>

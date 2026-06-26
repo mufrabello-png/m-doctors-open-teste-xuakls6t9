@@ -74,18 +74,21 @@ routerAdd(
       return false
     }
 
-    const parseDate = (v) => {
-      if (!v || typeof v !== 'string') return ''
+    const parseDateTime = (v) => {
+      if (!v || typeof v !== 'string') return { date: '', time: '', hourMinute: '' }
       const parts = v.split(' ')
-      const datePart = parts[0]
-      const timePart = parts[1] || '00:00:00'
-
-      if (!datePart.includes('/')) return ''
-      const [day, monthStr, year] = datePart.split('/')
+      const d = parts[0]
+      const t = parts[1] || '00:00:00'
+      if (!d.includes('/')) return { date: '', time: '', hourMinute: '' }
+      const [day, monthStr, year] = d.split('/')
       if (year && monthStr && day) {
-        return `${year}-${monthStr}-${day}T${timePart}.000Z`
+        return {
+          date: `${year}-${monthStr}-${day} 00:00:00.000Z`,
+          time: t,
+          hourMinute: t.substring(0, 5),
+        }
       }
-      return ''
+      return { date: '', time: '', hourMinute: '' }
     }
 
     const cleanedShifts = []
@@ -95,27 +98,34 @@ routerAdd(
 
       let pessoaNome = raw.pessoaNome
       if (!pessoaNome || String(pessoaNome).trim() === '') {
-        pessoaNome = 'sem profissional escalado'
+        pessoaNome = 'sem profissional'
+      }
+
+      let isSub = parseBool(raw.substituicao)
+      let substituicaoText = isSub ? 'PEDIDO DE SUBSTITUIÇÃO' : ''
+
+      const attrData = parseDateTime(raw.dataAtribuicaoFormatada)
+      const startData = parseDateTime(raw.horarioInicioFormatado)
+      const endData = parseDateTime(raw.horarioTerminoFormatado)
+
+      let horarioProgramado = ''
+      if (startData.hourMinute && endData.hourMinute) {
+        horarioProgramado = `${startData.hourMinute}-${endData.hourMinute}`
       }
 
       cleanedShifts.push({
         idApi: idApi,
         instituicaoNome: String(raw.instituicaoNome || ''),
-        instituicaoId: String(raw.instituicaoId || ''),
         pessoaNome: pessoaNome,
-        pessoaCPF: String(raw.pessoaCPF || ''),
-        pessoaDataNascimentoFormatada: String(raw.pessoaDataNascimentoFormatada || ''),
         pessoaConselhoRegional: String(raw.pessoaConselhoRegional || ''),
-        pessoaTelefoneFormatado: String(raw.pessoaTelefoneFormatado || ''),
         especialidadeNome: String(raw.especialidadeNome || ''),
-        gradeNome: String(raw.gradeNome || ''),
         tipoPlantaoNome: String(raw.tipoPlantaoNome || ''),
         valorFormatado: String(raw.valorFormatado || ''),
         valorApuradoFormatado: String(raw.valorApuradoFormatado || ''),
         periodicidade: String(raw.periodicidade || ''),
         diaDaSemana: String(raw.diaDaSemana || ''),
         pessoaNomeAtribuicao: String(raw.pessoaNomeAtribuicao || ''),
-        substituicao: parseBool(raw.substituicao),
+        substituicao: substituicaoText,
         pagamentoAVista: parseBool(raw.pagamentoAVista),
         pagamentoAntecipado: parseBool(raw.pagamentoAntecipado),
         valorPadrao: parseBool(raw.valorPadrao),
@@ -125,18 +135,17 @@ routerAdd(
         duracaoApuradaEmHoras: Number(raw.duracaoApuradaEmHoras) || 0,
         diurno: parseBool(raw.diurno),
         isFinalDeSemana: parseBool(raw.isFinalDeSemana),
-        dataAtribuicaoFormatada: parseDate(raw.dataAtribuicaoFormatada),
-        horarioInicioApuradoFormatado: parseDate(raw.horarioInicioApuradoFormatado),
-        horarioTerminoApuradoFormatado: parseDate(raw.horarioTerminoApuradoFormatado),
-        horarioInicioFormatado: parseDate(raw.horarioInicioFormatado),
-        horarioTerminoFormatado: parseDate(raw.horarioTerminoFormatado),
+        dataAtribuicao_data: attrData.date,
+        dataAtribuicao_hora: attrData.time,
+        horarioInicioFormatado_data: startData.date,
+        horarioTerminoFormatado_data: endData.date,
+        horarioProgramado: horarioProgramado,
         tipoValidacaoPlantaoSemanalFormatado: String(
           raw.tipoValidacaoPlantaoSemanalFormatado || '',
         ),
         vinculoNome: String(raw.vinculoNome || ''),
       })
     }
-
     const plantoesCol = $app.findCollectionByNameOrId('plantoes')
     let synced = 0
     let errors = []

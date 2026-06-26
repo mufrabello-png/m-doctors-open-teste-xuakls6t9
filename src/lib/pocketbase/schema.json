@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-06-26T19:22:36.932Z",
+  "generatedAt": "2026-06-26T19:26:06.918Z",
   "collections": [
     {
       "name": "users",
@@ -29,19 +29,14 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate"
-          ]
+          "autodateTriggers": ["onCreate"]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate",
-            "onUpdate"
-          ]
+          "autodateTriggers": ["onCreate", "onUpdate"]
         },
         {
           "name": "duuid_token",
@@ -115,19 +110,14 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate"
-          ]
+          "autodateTriggers": ["onCreate"]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate",
-            "onUpdate"
-          ]
+          "autodateTriggers": ["onCreate", "onUpdate"]
         },
         {
           "name": "doctor_id_ref",
@@ -176,24 +166,17 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate"
-          ]
+          "autodateTriggers": ["onCreate"]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate",
-            "onUpdate"
-          ]
+          "autodateTriggers": ["onCreate", "onUpdate"]
         }
       ],
-      "indexes": [
-        "CREATE INDEX idx_profiles_user_id ON profiles (user_id)"
-      ]
+      "indexes": ["CREATE INDEX idx_profiles_user_id ON profiles (user_id)"]
     },
     {
       "name": "configuracoes_sistema",
@@ -229,19 +212,14 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate"
-          ]
+          "autodateTriggers": ["onCreate"]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate",
-            "onUpdate"
-          ]
+          "autodateTriggers": ["onCreate", "onUpdate"]
         }
       ],
       "indexes": [
@@ -307,24 +285,17 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate"
-          ]
+          "autodateTriggers": ["onCreate"]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate",
-            "onUpdate"
-          ]
+          "autodateTriggers": ["onCreate", "onUpdate"]
         }
       ],
-      "indexes": [
-        "CREATE INDEX idx_alerts_user_id ON alerts (user_id)"
-      ]
+      "indexes": ["CREATE INDEX idx_alerts_user_id ON alerts (user_id)"]
     },
     {
       "name": "historico_consultas",
@@ -361,24 +332,17 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate"
-          ]
+          "autodateTriggers": ["onCreate"]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate",
-            "onUpdate"
-          ]
+          "autodateTriggers": ["onCreate", "onUpdate"]
         }
       ],
-      "indexes": [
-        "CREATE INDEX idx_historico_consultas_user_id ON historico_consultas (user_id)"
-      ]
+      "indexes": ["CREATE INDEX idx_historico_consultas_user_id ON historico_consultas (user_id)"]
     },
     {
       "name": "hospitals",
@@ -432,24 +396,17 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate"
-          ]
+          "autodateTriggers": ["onCreate"]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate",
-            "onUpdate"
-          ]
+          "autodateTriggers": ["onCreate", "onUpdate"]
         }
       ],
-      "indexes": [
-        "CREATE UNIQUE INDEX idx_hospitals_doctor_id_ref ON hospitals (doctor_id_ref)"
-      ]
+      "indexes": ["CREATE UNIQUE INDEX idx_hospitals_doctor_id_ref ON hospitals (doctor_id_ref)"]
     },
     {
       "name": "plantoes",
@@ -475,25 +432,7 @@
           "system": false
         },
         {
-          "name": "instituicaoId",
-          "type": "text",
-          "required": false,
-          "system": false
-        },
-        {
           "name": "pessoaNome",
-          "type": "text",
-          "required": false,
-          "system": false
-        },
-        {
-          "name": "pessoaCPF",
-          "type": "text",
-          "required": false,
-          "system": false
-        },
-        {
-          "name": "pessoaDataNascimentoFormatada",
           "type": "text",
           "required": false,
           "system": false
@@ -505,19 +444,7 @@
           "system": false
         },
         {
-          "name": "pessoaTelefoneFormatado",
-          "type": "text",
-          "required": false,
-          "system": false
-        },
-        {
           "name": "especialidadeNome",
-          "type": "text",
-          "required": false,
-          "system": false
-        },
-        {
-          "name": "gradeNome",
           "type": "text",
           "required": false,
           "system": false
@@ -560,7 +487,7 @@
         },
         {
           "name": "substituicao",
-          "type": "bool",
+          "type": "text",
           "required": false,
           "system": false
         },
@@ -619,32 +546,32 @@
           "system": false
         },
         {
-          "name": "dataAtribuicaoFormatada",
+          "name": "dataAtribuicao_data",
           "type": "date",
           "required": false,
           "system": false
         },
         {
-          "name": "horarioInicioApuradoFormatado",
+          "name": "dataAtribuicao_hora",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "horarioInicioFormatado_data",
           "type": "date",
           "required": false,
           "system": false
         },
         {
-          "name": "horarioTerminoApuradoFormatado",
+          "name": "horarioTerminoFormatado_data",
           "type": "date",
           "required": false,
           "system": false
         },
         {
-          "name": "horarioInicioFormatado",
-          "type": "date",
-          "required": false,
-          "system": false
-        },
-        {
-          "name": "horarioTerminoFormatado",
-          "type": "date",
+          "name": "horarioProgramado",
+          "type": "text",
           "required": false,
           "system": false
         },
@@ -665,24 +592,17 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate"
-          ]
+          "autodateTriggers": ["onCreate"]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate",
-            "onUpdate"
-          ]
+          "autodateTriggers": ["onCreate", "onUpdate"]
         }
       ],
-      "indexes": [
-        "CREATE UNIQUE INDEX idx_plantoes_idApi ON plantoes (idApi)"
-      ]
+      "indexes": ["CREATE UNIQUE INDEX idx_plantoes_idApi ON plantoes (idApi)"]
     }
   ]
 }

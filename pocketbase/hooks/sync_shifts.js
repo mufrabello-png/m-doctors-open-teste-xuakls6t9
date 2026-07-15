@@ -72,8 +72,11 @@ routerAdd(
       return null
     }
 
+    let doctorIdShifts = []
+    let resShift = null
+
     try {
-      const resShift = $http.send({
+      resShift = $http.send({
         url: endpoint,
         method: 'GET',
         headers: { DUUID: token, 'Content-Type': 'application/json' },

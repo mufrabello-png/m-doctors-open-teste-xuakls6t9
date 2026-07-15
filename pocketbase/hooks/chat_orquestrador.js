@@ -48,7 +48,8 @@ routerAdd(
             properties: {
               filtro: {
                 type: 'string',
-                description: 'Texto livre para buscar em médico, hospital, especialidade ou tipo de plantão.',
+                description:
+                  'Texto livre para buscar em médico, hospital, especialidade ou tipo de plantão.',
               },
               data_inicio: {
                 type: 'string',
@@ -328,16 +329,24 @@ routerAdd(
               const normalizeDate = (value) => {
                 const text = String(value || '').trim()
                 if (!text) return ''
-                if (/^\\d{2}\\/\\d{2}\\/\\d{4}$/.test(text)) {
+                if (/^\d{2}\/\d{2}\/\d{4}$/.test(text)) {
                   const [day, month, year] = text.split('/')
                   return year + '-' + month + '-' + day
                 }
                 return text.substring(0, 10)
               }
-              const filtro = String(args.filtro || '').trim().toLowerCase()
-              const instituicao = String(args.instituicao || '').trim().toLowerCase()
-              const pessoa = String(args.pessoa || '').trim().toLowerCase()
-              const especialidade = String(args.especialidade || '').trim().toLowerCase()
+              const filtro = String(args.filtro || '')
+                .trim()
+                .toLowerCase()
+              const instituicao = String(args.instituicao || '')
+                .trim()
+                .toLowerCase()
+              const pessoa = String(args.pessoa || '')
+                .trim()
+                .toLowerCase()
+              const especialidade = String(args.especialidade || '')
+                .trim()
+                .toLowerCase()
               const dataInicio = normalizeDate(args.data_inicio)
               const dataFim = normalizeDate(args.data_fim) || dataInicio
               const limite = Math.min(Math.max(Number(args.limite) || 200, 1), 500)

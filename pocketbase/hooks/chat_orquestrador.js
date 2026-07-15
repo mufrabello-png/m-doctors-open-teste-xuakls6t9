@@ -147,7 +147,24 @@ routerAdd(
                     timeout: 45,
                   })
                   if (resShift.statusCode < 400) {
-                    const shiftsData = resShift.json?.plantoes || []
+                    const extractPlantoes = (payload) => {
+                      if (Array.isArray(payload?.plantoes)) return payload.plantoes
+                      for (const key of [
+                        'data',
+                        'dados',
+                        'result',
+                        'resultado',
+                        'value',
+                        'valor',
+                      ]) {
+                        if (Array.isArray(payload?.[key]?.plantoes)) return payload[key].plantoes
+                      }
+                      return []
+                    }
+                    const shiftsData = extractPlantoes(resShift.json)
+                    $app
+                      .logger()
+                      .info('DoctorID chat sync response parsed', 'received', shiftsData.length)
                     const parseBool = (v) => {
                       if (typeof v === 'boolean') return v
                       if (typeof v === 'string') return v.toLowerCase() === 'true' || v === '1'
@@ -246,7 +263,7 @@ routerAdd(
                       tool_call_id: toolCall.id,
                       role: 'tool',
                       name: 'sync_periodo_plantoes',
-                      content: `Sincronização concluída com sucesso. ${synced} registros atualizados para o período ${args.data_inicio} até ${args.data_fim}.`,
+                      content: `Sincronização concluída com sucesso. A API retornou ${shiftsData.length} registros e ${synced} foram gravados para o período ${args.data_inicio} até ${args.data_fim}.`,
                     })
                   } else {
                     messages.push({

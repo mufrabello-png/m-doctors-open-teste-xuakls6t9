@@ -27,7 +27,13 @@ routerAdd(
 
     const endpoint = `https://www.doctorid.com.br/api/shiftListing?tipoEscala=Semanal&horarioInicio=${horarioInicio}&horarioTermino=${horarioTermino}&apresentarDadosDeAtribuicao=1&apresentarDadosEspecificosDaEquipe=true`
 
-    let shiftsData = []
+    const extractPlantoes = (payload) => {
+      if (Array.isArray(payload?.plantoes)) return payload.plantoes
+      for (const key of ['data', 'dados', 'result', 'resultado', 'value', 'valor']) {
+        if (Array.isArray(payload?.[key]?.plantoes)) return payload[key].plantoes
+      }
+      return []
+    }
 
     try {
       const resShift = $http.send({
@@ -49,7 +55,8 @@ routerAdd(
         })
       }
 
-      shiftsData = resShift.json?.plantoes || []
+      shiftsData = extractPlantoes(resShift.json)
+      $app.logger().info('DoctorID shifts response parsed', 'received', shiftsData.length)
 
       if (!Array.isArray(shiftsData)) {
         $app
@@ -175,11 +182,16 @@ routerAdd(
     })
 
     if (errors.length > 0 && synced === 0) {
-      return e.json(400, { error: 'Validation failed for all records', details: errors })
+      return e.json(400, {
+        error: 'Validation failed for all records',
+        receivedShifts: shiftsData.length,
+        details: errors,
+      })
     }
 
     return e.json(200, {
       message: 'Sync complete',
+      receivedShifts: shiftsData.length,
       syncedShifts: synced,
       errors: errors.length > 0 ? errors : undefined,
     })

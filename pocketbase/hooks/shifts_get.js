@@ -49,7 +49,14 @@ routerAdd(
         return e.json(502, { error: 'Failed to fetch shifts from Doctorid API' })
       }
 
-      const plantoes = res.json?.plantoes || []
+      const extractPlantoes = (payload) => {
+        if (Array.isArray(payload?.plantoes)) return payload.plantoes
+        for (const key of ['data', 'dados', 'result', 'resultado', 'value', 'valor']) {
+          if (Array.isArray(payload?.[key]?.plantoes)) return payload[key].plantoes
+        }
+        return []
+      }
+      const plantoes = extractPlantoes(res.json)
 
       if (!Array.isArray(plantoes)) {
         return e.json(502, {

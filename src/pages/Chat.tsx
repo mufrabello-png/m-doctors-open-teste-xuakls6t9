@@ -162,7 +162,7 @@ export default function Chat() {
       const res = await pb.send('/backend/v1/shifts/sync', { method: 'POST' })
       toast({
         title: 'Sincronização concluída',
-        description: `${res.syncedShifts || 0} escalas integradas à inteligência com sucesso.`,
+        description: `A API retornou ${res.receivedShifts ?? 0} escalas e ${res.syncedShifts ?? 0} foram gravadas.`,
       })
     } catch (err: any) {
       const isAuthError = err.status === 401 || err.status === 403

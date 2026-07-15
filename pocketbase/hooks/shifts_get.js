@@ -54,7 +54,7 @@ routerAdd(
         for (const key of ['data', 'dados', 'result', 'resultado', 'value', 'valor']) {
           if (Array.isArray(payload?.[key]?.plantoes)) return payload[key].plantoes
         }
-        return []
+        return null
       }
       const plantoes = extractPlantoes(res.json)
 

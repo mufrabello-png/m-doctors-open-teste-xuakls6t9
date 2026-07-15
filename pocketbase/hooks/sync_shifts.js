@@ -51,14 +51,17 @@ routerAdd(
 
       if (resShift.statusCode >= 400) {
         return e.json(502, {
-          error: 'A API Doctor ID (Escalas) está inacessível. Status: ' + resShift.statusCode,
+          error:
+            'A API Doctor ID (Escalas) está inacessível. Status: ' +
+            resShift.statusCode +
+            '. Verifique o DUUID_TOKEN e o período consultado.',
         })
       }
 
-      shiftsData = extractPlantoes(resShift.json)
-      $app.logger().info('DoctorID shifts response parsed', 'received', shiftsData.length)
+      doctorIdShifts = extractPlantoes(resShift.json)
+      $app.logger().info('DoctorID shifts response parsed', 'received', doctorIdShifts.length)
 
-      if (!Array.isArray(shiftsData)) {
+      if (!Array.isArray(doctorIdShifts)) {
         $app
           .logger()
           .error(
@@ -99,7 +102,7 @@ routerAdd(
     }
 
     const cleanedShifts = []
-    for (const raw of shiftsData) {
+    for (const raw of doctorIdShifts) {
       const idApi = String(raw.id || '')
       if (!idApi) continue
 
@@ -184,14 +187,14 @@ routerAdd(
     if (errors.length > 0 && synced === 0) {
       return e.json(400, {
         error: 'Validation failed for all records',
-        receivedShifts: shiftsData.length,
+        receivedShifts: doctorIdShifts.length,
         details: errors,
       })
     }
 
     return e.json(200, {
       message: 'Sync complete',
-      receivedShifts: shiftsData.length,
+      receivedShifts: doctorIdShifts.length,
       syncedShifts: synced,
       errors: errors.length > 0 ? errors : undefined,
     })

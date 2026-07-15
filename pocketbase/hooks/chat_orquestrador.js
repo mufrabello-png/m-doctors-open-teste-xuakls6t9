@@ -161,10 +161,10 @@ routerAdd(
                       }
                       return []
                     }
-                    const shiftsData = extractPlantoes(resShift.json)
+                    const doctorIdShifts = extractPlantoes(resShift.json)
                     $app
                       .logger()
-                      .info('DoctorID chat sync response parsed', 'received', shiftsData.length)
+                      .info('DoctorID chat sync response parsed', 'received', doctorIdShifts.length)
                     const parseBool = (v) => {
                       if (typeof v === 'boolean') return v
                       if (typeof v === 'string') return v.toLowerCase() === 'true' || v === '1'
@@ -189,7 +189,7 @@ routerAdd(
                     }
 
                     const cleanedShifts = []
-                    for (const raw of shiftsData) {
+                    for (const raw of doctorIdShifts) {
                       const idApi = String(raw.id || '')
                       if (!idApi) continue
                       let pessoaNome = raw.pessoaNome

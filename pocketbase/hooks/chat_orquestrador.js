@@ -103,7 +103,10 @@ routerAdd(
           model: 'gpt-4o-mini',
           messages: messages,
           tools: tools,
-          tool_choice: 'auto',
+          tool_choice: {
+            type: 'function',
+            function: { name: 'get_plantoes' },
+          },
         }),
         timeout: 30,
       })
@@ -276,6 +279,10 @@ routerAdd(
             sendEvent('status', { message: 'Buscando informações na base local...' })
             let plantoesData = []
             try {
+              const args = JSON.parse(toolCall.function.arguments || '{}')
+              const filtro = String(args.filtro || '')
+                .trim()
+                .toLowerCase()
               const plantoes = $app.findRecordsByFilter(
                 'plantoes',
                 '',
@@ -283,16 +290,25 @@ routerAdd(
                 200,
                 0,
               )
-              plantoesData = plantoes.map((p) => ({
-                instituicaoNome: p.getString('instituicaoNome'),
-                pessoaNome: p.getString('pessoaNome'),
-                horarioProgramado: p.getString('horarioProgramado'),
-                dataInicio: p.getString('horarioInicioFormatado_data').substring(0, 10),
-                diaDaSemana: p.getString('diaDaSemana'),
-                especialidade: p.getString('especialidadeNome'),
-                substituicao: p.getString('substituicao'),
-                valorFormatado: p.getString('valorFormatado'),
-              }))
+              plantoesData = plantoes
+                .map((p) => ({
+                  instituicaoNome: p.getString('instituicaoNome'),
+                  pessoaNome: p.getString('pessoaNome'),
+                  horarioProgramado: p.getString('horarioProgramado'),
+                  dataInicio: p.getString('horarioInicioFormatado_data').substring(0, 10),
+                  diaDaSemana: p.getString('diaDaSemana'),
+                  especialidade: p.getString('especialidadeNome'),
+                  substituicao: p.getString('substituicao'),
+                  valorFormatado: p.getString('valorFormatado'),
+                  fechado: p.getBool('fechado'),
+                  duracaoEmHoras: p.getFloat('duracaoEmHoras'),
+                }))
+                .filter((item) => {
+                  if (!filtro) return true
+                  return Object.values(item).some((value) =>
+                    String(value).toLowerCase().includes(filtro),
+                  )
+                })
             } catch (err) {
               $app.logger().error('Erro ao buscar plantoes para ferramenta', 'error', err.message)
             }

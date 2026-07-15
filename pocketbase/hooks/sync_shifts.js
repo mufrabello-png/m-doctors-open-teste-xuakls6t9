@@ -2,6 +2,43 @@ routerAdd(
   'POST',
   '/backend/v1/shifts/sync',
   (e) => {
+    const logDoctorId = (data) => {
+      try {
+        const col = $app.findCollectionByNameOrId('doctorid_logs')
+        const record = new Record(col)
+        for (const key in data) {
+          if (data[key] !== undefined && data[key] !== null) record.set(key, data[key])
+        }
+        $app.save(record)
+      } catch (logError) {
+        $app.logger().error('DoctorID diagnostic log failed', 'error', logError.message)
+      }
+    }
+
+    const previewPayload = (payload) => {
+      try {
+        const clone = JSON.parse(JSON.stringify(payload || {}))
+        const redact = (value) => {
+          if (!value || typeof value !== 'object') return value
+          if (Array.isArray(value)) return value.map(redact)
+          const result = {}
+          for (const key in value) {
+            result[key] = [
+              'pessoaCPF',
+              'pessoaTelefoneFormatado',
+              'pessoaDataNascimentoFormatada',
+            ].includes(key)
+              ? '[REDACTED]'
+              : redact(value[key])
+          }
+          return result
+        }
+        return JSON.stringify(redact(clone)).substring(0, 5000)
+      } catch (_) {
+        return ''
+      }
+    }
+
     let token = ''
     try {
       const conf = $app.findFirstRecordByData('configuracoes_sistema', 'chave', 'DUUID_TOKEN')
@@ -44,12 +81,30 @@ routerAdd(
       })
 
       if (resShift.statusCode === 401 || resShift.statusCode === 403) {
+        logDoctorId({
+          operation: 'sync',
+          endpoint: endpoint,
+          statusCode: resShift.statusCode,
+          requestPeriod: horarioInicio + ' até ' + horarioTermino,
+          responseKeys: Object.keys(resShift.json || {}).join(','),
+          responsePreview: previewPayload(resShift.json),
+          errorMessage: 'Token rejeitado pelo Doctor ID.',
+        })
         return e.json(401, {
           error: 'Token expirado ou inválido. Por favor, atualize o DUUID_TOKEN.',
         })
       }
 
       if (resShift.statusCode >= 400) {
+        logDoctorId({
+          operation: 'sync',
+          endpoint: endpoint,
+          statusCode: resShift.statusCode,
+          requestPeriod: horarioInicio + ' até ' + horarioTermino,
+          responseKeys: Object.keys(resShift.json || {}).join(','),
+          responsePreview: previewPayload(resShift.json),
+          errorMessage: 'Doctor ID retornou status HTTP ' + resShift.statusCode,
+        })
         return e.json(502, {
           error:
             'A API Doctor ID (Escalas) está inacessível. Status: ' +
@@ -59,7 +114,13 @@ routerAdd(
       }
 
       doctorIdShifts = extractPlantoes(resShift.json)
-      $app.logger().info('DoctorID shifts response parsed', 'received', doctorIdShifts.length)
+      $app
+        .logger()
+        .info(
+          'DoctorID shifts response parsed',
+          'received',
+          doctorIdShifts ? doctorIdShifts.length : 0,
+        )
 
       if (!Array.isArray(doctorIdShifts)) {
         $app
@@ -69,11 +130,26 @@ routerAdd(
             'body',
             resShift.body ? new TextDecoder().decode(resShift.body) : '',
           )
+        logDoctorId({
+          operation: 'sync',
+          endpoint: endpoint,
+          statusCode: resShift.statusCode,
+          requestPeriod: horarioInicio + ' até ' + horarioTermino,
+          responseKeys: Object.keys(resShift.json || {}).join(','),
+          responsePreview: previewPayload(resShift.json),
+          errorMessage: 'Formato inválido: chave plantoes não encontrada.',
+        })
         return e.json(502, {
           error: 'Formato de resposta inválido da API Doctor ID. Chave plantoes não encontrada.',
         })
       }
     } catch (err) {
+      logDoctorId({
+        operation: 'sync',
+        endpoint: endpoint,
+        requestPeriod: horarioInicio + ' até ' + horarioTermino,
+        errorMessage: 'Falha de comunicação: ' + err.message,
+      })
       return e.json(502, { error: 'Falha de comunicação com a API Doctor ID: ' + err.message })
     }
 
@@ -191,6 +267,18 @@ routerAdd(
         details: errors,
       })
     }
+
+    logDoctorId({
+      operation: 'sync',
+      endpoint: endpoint,
+      statusCode: 200,
+      requestPeriod: horarioInicio + ' até ' + horarioTermino,
+      responseKeys: Object.keys(resShift.json || {}).join(','),
+      responsePreview: previewPayload(resShift.json),
+      receivedCount: doctorIdShifts.length,
+      syncedCount: synced,
+      errorMessage: errors.length > 0 ? JSON.stringify(errors).substring(0, 2000) : '',
+    })
 
     return e.json(200, {
       message: 'Sync complete',

@@ -1,7 +1,16 @@
 import { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { CalendarDays, Clock, AlertTriangle, ArrowRight, Loader2, AlertCircle } from 'lucide-react'
+import {
+  CalendarDays,
+  Clock,
+  AlertTriangle,
+  ArrowRight,
+  Loader2,
+  AlertCircle,
+  FileText,
+  RefreshCw,
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import pb from '@/lib/pocketbase/client'
@@ -14,6 +23,20 @@ export default function Dashboard() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [alertsCount, setAlertsCount] = useState(0)
+  const [doctorIdLogs, setDoctorIdLogs] = useState<any[]>([])
+  const [logsLoading, setLogsLoading] = useState(true)
+
+  const loadDoctorIdLogs = async () => {
+    try {
+      setLogsLoading(true)
+      const logs = await pb.send('/backend/v1/doctor-id/logs?limit=30', { method: 'GET' })
+      setDoctorIdLogs(Array.isArray(logs) ? logs : [])
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setLogsLoading(false)
+    }
+  }
 
   useEffect(() => {
     if (user) {
@@ -22,6 +45,8 @@ export default function Dashboard() {
         .then((res) => setAlertsCount(res.totalItems))
         .catch(() => {})
     }
+
+    loadDoctorIdLogs()
 
     const fetchShifts = async () => {
       try {
@@ -159,6 +184,77 @@ export default function Dashboard() {
                   >
                     {shift.status || 'Agendado'}
                   </Badge>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card className="border-0 shadow-sm">
+        <CardHeader className="flex flex-row items-center justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <FileText className="h-5 w-5 text-primary" />
+              Diagnóstico Doctor ID
+            </CardTitle>
+            <CardDescription>
+              Histórico técnico das consultas, respostas e erros da integração.
+            </CardDescription>
+          </div>
+          <Button variant="outline" size="sm" onClick={loadDoctorIdLogs} disabled={logsLoading}>
+            <RefreshCw className={`mr-2 h-4 w-4 ${logsLoading ? 'animate-spin' : ''}`} />
+            Atualizar
+          </Button>
+        </CardHeader>
+        <CardContent>
+          {logsLoading ? (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" /> Carregando logs...
+            </div>
+          ) : doctorIdLogs.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              Nenhuma tentativa registrada. Execute uma sincronização para gerar o primeiro
+              diagnóstico.
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {doctorIdLogs.map((log) => (
+                <div key={log.id} className="rounded-lg border border-border/60 p-3 text-sm">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="font-medium">
+                      {log.operation === 'sync' ? 'Sincronização' : log.operation}
+                    </span>
+                    <span
+                      className={`rounded px-2 py-0.5 text-xs font-medium ${log.statusCode >= 400 ? 'bg-destructive/10 text-destructive' : 'bg-primary/10 text-primary'}`}
+                    >
+                      HTTP {log.statusCode || 'N/A'}
+                    </span>
+                  </div>
+                  <div className="mt-2 grid gap-1 text-xs text-muted-foreground md:grid-cols-2">
+                    <span>Data: {new Date(log.created).toLocaleString('pt-BR')}</span>
+                    <span>Período: {log.requestPeriod || 'não informado'}</span>
+                    <span>Recebidos: {log.receivedCount ?? 0}</span>
+                    <span>Gravados: {log.syncedCount ?? 0}</span>
+                    <span className="md:col-span-2 break-all">
+                      Chaves: {log.responseKeys || 'nenhuma'}
+                    </span>
+                  </div>
+                  {log.errorMessage && (
+                    <div className="mt-2 rounded bg-destructive/10 p-2 text-xs text-destructive">
+                      Erro: {log.errorMessage}
+                    </div>
+                  )}
+                  {log.responsePreview && (
+                    <details className="mt-2">
+                      <summary className="cursor-pointer text-xs font-medium text-muted-foreground">
+                        Ver resposta recebida (dados sensíveis mascarados)
+                      </summary>
+                      <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-all rounded bg-muted p-2 text-[11px]">
+                        {log.responsePreview}
+                      </pre>
+                    </details>
+                  )}
                 </div>
               ))}
             </div>

@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-06-26T19:33:48.314Z",
+  "generatedAt": "2026-07-15T15:43:20.841Z",
   "collections": [
     {
       "name": "users",
@@ -29,14 +29,19 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         },
         {
           "name": "duuid_token",
@@ -110,14 +115,19 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         },
         {
           "name": "doctor_id_ref",
@@ -166,17 +176,24 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         }
       ],
-      "indexes": ["CREATE INDEX idx_profiles_user_id ON profiles (user_id)"]
+      "indexes": [
+        "CREATE INDEX idx_profiles_user_id ON profiles (user_id)"
+      ]
     },
     {
       "name": "configuracoes_sistema",
@@ -212,14 +229,19 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         }
       ],
       "indexes": [
@@ -285,17 +307,24 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         }
       ],
-      "indexes": ["CREATE INDEX idx_alerts_user_id ON alerts (user_id)"]
+      "indexes": [
+        "CREATE INDEX idx_alerts_user_id ON alerts (user_id)"
+      ]
     },
     {
       "name": "historico_consultas",
@@ -332,17 +361,24 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         }
       ],
-      "indexes": ["CREATE INDEX idx_historico_consultas_user_id ON historico_consultas (user_id)"]
+      "indexes": [
+        "CREATE INDEX idx_historico_consultas_user_id ON historico_consultas (user_id)"
+      ]
     },
     {
       "name": "hospitals",
@@ -396,17 +432,24 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         }
       ],
-      "indexes": ["CREATE UNIQUE INDEX idx_hospitals_doctor_id_ref ON hospitals (doctor_id_ref)"]
+      "indexes": [
+        "CREATE UNIQUE INDEX idx_hospitals_doctor_id_ref ON hospitals (doctor_id_ref)"
+      ]
     },
     {
       "name": "plantoes",
@@ -592,17 +635,113 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         }
       ],
-      "indexes": ["CREATE UNIQUE INDEX idx_plantoes_idApi ON plantoes (idApi)"]
+      "indexes": [
+        "CREATE UNIQUE INDEX idx_plantoes_idApi ON plantoes (idApi)"
+      ]
+    },
+    {
+      "name": "doctorid_logs",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != ''",
+        "view": "@request.auth.id != ''",
+        "create": null,
+        "update": null,
+        "delete": null
+      },
+      "fields": [
+        {
+          "name": "operation",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "endpoint",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "statusCode",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "requestPeriod",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "responseKeys",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "receivedCount",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "syncedCount",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "responsePreview",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "errorMessage",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": [
+            "onCreate"
+          ]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_doctorid_logs_created ON doctorid_logs (created DESC)"
+      ]
     }
   ]
 }

@@ -389,7 +389,7 @@ routerAdd(
                     (!especialidade || item.especialidade.toLowerCase().includes(especialidade))
                   )
                 })
-              const plantoesData = {
+              plantoesData = {
                 totalEncontrado: filtered.length,
                 retornados: Math.min(filtered.length, limite),
                 filtros: {

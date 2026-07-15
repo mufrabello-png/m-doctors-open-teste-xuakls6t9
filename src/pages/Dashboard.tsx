@@ -20,6 +20,7 @@ import { useAuth } from '@/hooks/use-auth'
 export default function Dashboard() {
   const { user } = useAuth()
   const [shifts, setShifts] = useState<any[]>([])
+  const [totalShifts, setTotalShifts] = useState(0)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [alertsCount, setAlertsCount] = useState(0)
@@ -56,6 +57,7 @@ export default function Dashboard() {
         // Extract array from standard response structures
         const data = Array.isArray(res) ? res : res?.items || res?.data || res?.shifts || []
         setShifts(data)
+        setTotalShifts(Number(res?.totalItems ?? data.length))
         setError(null)
       } catch (err: any) {
         console.error(err)
@@ -72,7 +74,7 @@ export default function Dashboard() {
   const stats = [
     {
       title: 'Plantões no Período',
-      value: shifts.length > 0 ? shifts.length.toString() : '0',
+      value: totalShifts.toLocaleString('pt-BR'),
       icon: CalendarDays,
       trend: 'Dados reais do Doctor ID',
       color: 'text-primary',
@@ -157,7 +159,7 @@ export default function Dashboard() {
             <div className="space-y-6">
               <p className="text-sm text-muted-foreground">
                 Exibindo {Math.min(shifts.length, 50).toLocaleString('pt-BR')} de{' '}
-                {shifts.length.toLocaleString('pt-BR')} plantões retornados pelo Doctor ID.
+                {totalShifts.toLocaleString('pt-BR')} plantões sincronizados do Doctor ID.
               </p>
               {visibleShifts.map((shift: any, index: number) => (
                 <div

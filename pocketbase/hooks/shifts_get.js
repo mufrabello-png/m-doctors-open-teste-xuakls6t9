@@ -2,82 +2,50 @@ routerAdd(
   'GET',
   '/backend/v1/shifts',
   (e) => {
-    let token = ''
     try {
-      const conf = $app.findFirstRecordByData('configuracoes_sistema', 'chave', 'DUUID_TOKEN')
-      token = conf.getString('valor')
-    } catch (_) {}
+      const totalItems = $app.countRecords('plantoes')
+      const records = $app.findRecordsByFilter(
+        'plantoes',
+        '',
+        '-horarioInicioFormatado_data',
+        500,
+        0,
+      )
 
-    if (!token) {
-      token = $secrets.get('DUUID_TOKEN') || ''
-    }
-
-    if (!token) {
-      return e.json(401, { error: 'DUUID_TOKEN não configurado.' })
-    }
-
-    const spTime = new Date(new Date().getTime() - 3 * 3600 * 1000)
-    const yyyy = spTime.getUTCFullYear()
-    const month = spTime.getUTCMonth()
-    const mm = String(month + 1).padStart(2, '0')
-    const lastDay = new Date(Date.UTC(yyyy, month + 1, 0)).getUTCDate()
-
-    const horarioInicio = `01/${mm}/${yyyy}`
-    const horarioTermino = `${String(lastDay).padStart(2, '0')}/${mm}/${yyyy}`
-
-    const endpoint = `https://www.doctorid.com.br/api/shiftListing?tipoEscala=Semanal&horarioInicio=${horarioInicio}&horarioTermino=${horarioTermino}&apresentarDadosDeAtribuicao=1&apresentarDadosEspecificosDaEquipe=true`
-
-    try {
-      const res = $http.send({
-        url: endpoint,
-        method: 'GET',
-        headers: {
-          DUUID: token,
-          'Content-Type': 'application/json',
-        },
-        timeout: 15,
+      const items = records.map((shift) => {
+        const pessoaNome = shift.getString('pessoaNome')
+        return {
+          id: shift.getString('idApi') || shift.id,
+          idApi: shift.getString('idApi'),
+          specialty: shift.getString('especialidadeNome') || 'Não informada',
+          specialtyName: shift.getString('especialidadeNome'),
+          location: shift.getString('instituicaoNome') || 'Local não informado',
+          hospital: shift.getString('instituicaoNome'),
+          date: shift.getString('horarioInicioFormatado_data'),
+          endDate: shift.getString('horarioTerminoFormatado_data'),
+          time: shift.getString('horarioProgramado'),
+          doctorName: pessoaNome,
+          pessoaNome,
+          dayOfWeek: shift.getString('diaDaSemana'),
+          type: shift.getString('tipoPlantaoNome'),
+          value: shift.getString('valorFormatado'),
+          status: pessoaNome && pessoaNome !== 'sem profissional' ? 'Atribuído' : 'Disponível',
+          available: pessoaNome === 'sem profissional',
+          closed: shift.getBool('fechado'),
+          durationHours: shift.getFloat('duracaoEmHoras'),
+        }
       })
 
-      if (res.statusCode === 401 || res.statusCode === 403) {
-        return e.json(401, {
-          error: 'Token expirado ou inválido. Por favor, atualize o DUUID_TOKEN.',
-        })
-      }
-
-      if (res.statusCode >= 400) {
-        $app.logger().error('Doctorid API error', 'status', res.statusCode)
-        return e.json(502, { error: 'Failed to fetch shifts from Doctorid API' })
-      }
-
-      const extractPlantoes = (payload) => {
-        if (Array.isArray(payload?.plantoes)) return payload.plantoes
-        for (const key of ['data', 'dados', 'result', 'resultado', 'value', 'valor']) {
-          if (Array.isArray(payload?.[key]?.plantoes)) return payload[key].plantoes
-        }
-        return null
-      }
-      const plantoes = extractPlantoes(res.json)
-
-      if (!Array.isArray(plantoes)) {
-        return e.json(502, {
-          error: 'Formato de resposta inválido da API Doctor ID. Chave plantoes não encontrada.',
-        })
-      }
-
-      const items = plantoes.map((shift) => ({
-        ...shift,
-        specialty: shift.especialidadeNome || 'Não informada',
-        location: shift.instituicaoNome || 'Local não informado',
-        date: shift.horarioInicioFormatado || '',
-        time: shift.horarioProgramado || '',
-        status:
-          shift.pessoaNome && shift.pessoaNome !== 'sem profissional' ? 'Atribuído' : 'Disponível',
-      }))
-
-      return e.json(200, { items, totalItems: items.length })
+      return e.json(200, {
+        items,
+        totalItems,
+        returnedItems: items.length,
+        source: 'plantoes',
+      })
     } catch (err) {
-      $app.logger().error('Doctorid API transport error', 'error', err.message)
-      return e.json(502, { error: 'Failed to communicate with Doctorid API' })
+      return e.json(500, {
+        error: 'Erro ao carregar as escalas sincronizadas: ' + err.message,
+      })
     }
   },
   $apis.requireAuth(),

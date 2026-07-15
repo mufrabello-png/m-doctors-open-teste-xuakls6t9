@@ -263,7 +263,7 @@ routerAdd(
                       tool_call_id: toolCall.id,
                       role: 'tool',
                       name: 'sync_periodo_plantoes',
-                      content: `Sincronização concluída com sucesso. A API retornou ${shiftsData.length} registros e ${synced} foram gravados para o período ${args.data_inicio} até ${args.data_fim}.`,
+                      content: `Sincronização concluída com sucesso. A API retornou ${cleanedShifts.length} registros válidos e ${synced} foram gravados para o período ${args.data_inicio} até ${args.data_fim}.`,
                     })
                   } else {
                     messages.push({

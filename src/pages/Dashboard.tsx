@@ -54,7 +54,7 @@ export default function Dashboard() {
         const res = await pb.send('/backend/v1/shifts', { method: 'GET' })
 
         // Extract array from standard response structures
-        const data = Array.isArray(res) ? res : res?.data || res?.shifts || []
+        const data = Array.isArray(res) ? res : res?.items || res?.data || res?.shifts || []
         setShifts(data)
         setError(null)
       } catch (err: any) {
@@ -67,12 +67,14 @@ export default function Dashboard() {
     fetchShifts()
   }, [])
 
+  const visibleShifts = shifts.slice(0, 50)
+
   const stats = [
     {
-      title: 'Plantões Hoje',
+      title: 'Plantões no Período',
       value: shifts.length > 0 ? shifts.length.toString() : '0',
       icon: CalendarDays,
-      trend: 'Atualizado hoje',
+      trend: 'Dados reais do Doctor ID',
       color: 'text-primary',
       bg: 'bg-primary/10',
     },
@@ -153,7 +155,11 @@ export default function Dashboard() {
             <div className="text-center py-8 text-muted-foreground">Nenhuma escala encontrada.</div>
           ) : (
             <div className="space-y-6">
-              {shifts.map((shift: any, index: number) => (
+              <p className="text-sm text-muted-foreground">
+                Exibindo {Math.min(shifts.length, 50).toLocaleString('pt-BR')} de{' '}
+                {shifts.length.toLocaleString('pt-BR')} plantões retornados pelo Doctor ID.
+              </p>
+              {visibleShifts.map((shift: any, index: number) => (
                 <div
                   key={shift.id || index}
                   className="flex items-center justify-between border-b border-border/50 pb-4 last:border-0 last:pb-0"

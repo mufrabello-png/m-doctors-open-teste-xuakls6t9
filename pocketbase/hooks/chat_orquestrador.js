@@ -48,7 +48,35 @@ routerAdd(
             properties: {
               filtro: {
                 type: 'string',
-                description: 'Filtro opcional. Ex: nome do médico ou instituição.',
+                description: 'Texto livre para buscar em médico, hospital, especialidade ou tipo de plantão.',
+              },
+              data_inicio: {
+                type: 'string',
+                description: 'Data inicial no formato YYYY-MM-DD ou DD/MM/YYYY.',
+              },
+              data_fim: {
+                type: 'string',
+                description: 'Data final no formato YYYY-MM-DD ou DD/MM/YYYY.',
+              },
+              instituicao: {
+                type: 'string',
+                description: 'Nome ou parte do nome do hospital/instituição.',
+              },
+              pessoa: {
+                type: 'string',
+                description: 'Nome ou parte do nome do médico.',
+              },
+              especialidade: {
+                type: 'string',
+                description: 'Especialidade médica.',
+              },
+              apenas_disponiveis: {
+                type: 'boolean',
+                description: 'Use true para plantões sem profissional atribuído.',
+              },
+              limite: {
+                type: 'integer',
+                description: 'Quantidade máxima de resultados detalhados, entre 1 e 500.',
               },
             },
           },
@@ -82,7 +110,7 @@ routerAdd(
       {
         role: 'system',
         content:
-          'Você é um assistente de escalas médicas. Ao ser questionado sobre plantões ou escalas, você DEVE priorizar a chamada da função `get_plantoes` para obter os dados do banco de dados local. Se os dados retornados não cobrirem o período solicitado, ou se o usuário pedir atualização, chame `sync_periodo_plantoes` para atualizar a base de dados, e em seguida chame `get_plantoes` novamente. Os dados retornados são a sua ÚNICA fonte de verdade. Retorne números e horários em **negrito** e use listas para enumerar.',
+          'Você é o Oráculo de Escalas do Doctor ID. Responda em português claro, direto e factual. Para toda pergunta sobre plantões, escalas, médicos, hospitais, horários, disponibilidade, valores ou especialidades, consulte obrigatoriamente a função `get_plantoes` antes de responder. Extraia da pergunta os filtros de período, instituição, pessoa, especialidade e disponibilidade. Nunca diga apenas que está pesquisando: depois da consulta, entregue os resultados encontrados. Use exclusivamente os dados retornados pela função; não invente, complete ou suponha informações. Se houver zero resultados, diga quais filtros foram usados e informe que não houve correspondência. Se houver muitos resultados, informe o total encontrado e liste os mais relevantes, sem afirmar que a lista parcial é o total. Diferencie plantão disponível (pessoaNome igual a sem profissional) de plantão atribuído. Sempre informe data, horário, instituição, médico, especialidade e status quando existirem. Para perguntas ambíguas, faça uma pergunta curta de esclarecimento somente se não for possível pesquisar com segurança. Formate respostas com listas e destaque números, datas e horários em **negrito**.',
       },
       {
         role: 'user',
@@ -297,35 +325,75 @@ routerAdd(
             let plantoesData = []
             try {
               const args = JSON.parse(toolCall.function.arguments || '{}')
-              const filtro = String(args.filtro || '')
-                .trim()
-                .toLowerCase()
+              const normalizeDate = (value) => {
+                const text = String(value || '').trim()
+                if (!text) return ''
+                if (/^\\d{2}\\/\\d{2}\\/\\d{4}$/.test(text)) {
+                  const [day, month, year] = text.split('/')
+                  return year + '-' + month + '-' + day
+                }
+                return text.substring(0, 10)
+              }
+              const filtro = String(args.filtro || '').trim().toLowerCase()
+              const instituicao = String(args.instituicao || '').trim().toLowerCase()
+              const pessoa = String(args.pessoa || '').trim().toLowerCase()
+              const especialidade = String(args.especialidade || '').trim().toLowerCase()
+              const dataInicio = normalizeDate(args.data_inicio)
+              const dataFim = normalizeDate(args.data_fim) || dataInicio
+              const limite = Math.min(Math.max(Number(args.limite) || 200, 1), 500)
               const plantoes = $app.findRecordsByFilter(
                 'plantoes',
                 '',
                 '-horarioInicioFormatado_data',
-                200,
+                5000,
                 0,
               )
-              plantoesData = plantoes
+              const filtered = plantoes
                 .map((p) => ({
+                  idApi: p.getString('idApi'),
                   instituicaoNome: p.getString('instituicaoNome'),
                   pessoaNome: p.getString('pessoaNome'),
                   horarioProgramado: p.getString('horarioProgramado'),
                   dataInicio: p.getString('horarioInicioFormatado_data').substring(0, 10),
+                  dataTermino: p.getString('horarioTerminoFormatado_data').substring(0, 10),
                   diaDaSemana: p.getString('diaDaSemana'),
                   especialidade: p.getString('especialidadeNome'),
+                  tipoPlantaoNome: p.getString('tipoPlantaoNome'),
                   substituicao: p.getString('substituicao'),
                   valorFormatado: p.getString('valorFormatado'),
                   fechado: p.getBool('fechado'),
+                  disponivel: p.getString('pessoaNome') === 'sem profissional',
                   duracaoEmHoras: p.getFloat('duracaoEmHoras'),
                 }))
                 .filter((item) => {
-                  if (!filtro) return true
-                  return Object.values(item).some((value) =>
-                    String(value).toLowerCase().includes(filtro),
+                  const searchable = Object.values(item).join(' ').toLowerCase()
+                  const dateOk =
+                    (!dataInicio || item.dataInicio >= dataInicio) &&
+                    (!dataFim || item.dataInicio <= dataFim)
+                  const freeOk = args.apenas_disponiveis !== true || item.disponivel
+                  return (
+                    dateOk &&
+                    freeOk &&
+                    (!filtro || searchable.includes(filtro)) &&
+                    (!instituicao || item.instituicaoNome.toLowerCase().includes(instituicao)) &&
+                    (!pessoa || item.pessoaNome.toLowerCase().includes(pessoa)) &&
+                    (!especialidade || item.especialidade.toLowerCase().includes(especialidade))
                   )
                 })
+              const plantoesData = {
+                totalEncontrado: filtered.length,
+                retornados: Math.min(filtered.length, limite),
+                filtros: {
+                  filtro,
+                  data_inicio: dataInicio,
+                  data_fim: dataFim,
+                  instituicao,
+                  pessoa,
+                  especialidade,
+                  apenas_disponiveis: args.apenas_disponiveis === true,
+                },
+                dados: filtered.slice(0, limite),
+              }
             } catch (err) {
               $app.logger().error('Erro ao buscar plantoes para ferramenta', 'error', err.message)
             }

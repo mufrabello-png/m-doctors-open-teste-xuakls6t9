@@ -64,7 +64,17 @@ routerAdd(
         })
       }
 
-      return e.json(200, plantoes)
+      const items = plantoes.map((shift) => ({
+        ...shift,
+        specialty: shift.especialidadeNome || 'Não informada',
+        location: shift.instituicaoNome || 'Local não informado',
+        date: shift.horarioInicioFormatado || '',
+        time: shift.horarioProgramado || '',
+        status:
+          shift.pessoaNome && shift.pessoaNome !== 'sem profissional' ? 'Atribuído' : 'Disponível',
+      }))
+
+      return e.json(200, { items, totalItems: items.length })
     } catch (err) {
       $app.logger().error('Doctorid API transport error', 'error', err.message)
       return e.json(502, { error: 'Failed to communicate with Doctorid API' })

@@ -93,6 +93,7 @@ export default function Chat() {
     setIsStreaming(true)
     const controller = new AbortController()
     abortRef.current = controller
+    let headerConvId: string | null = null
     try {
       const res = await fetch(streamChatUrl, {
         method: 'POST',
@@ -100,6 +101,7 @@ export default function Chat() {
         body: JSON.stringify({ message: text, conversation_id: currentConvId }),
         signal: controller.signal,
       })
+      headerConvId = res.headers.get('X-Conversation-Id')
       const result = await streamAgentChat(res, {
         onChunk: (_delta, full) => {
           setMessages((prev) =>
@@ -113,8 +115,9 @@ export default function Chat() {
           prev.map((m) => (m.id === assistantMsg.id ? { ...m, content: result.content } : m)),
         )
       }
-      if (!currentConvId && result.conversation_id) {
-        setCurrentConvId(result.conversation_id)
+      const resolvedConvId = result.conversation_id || headerConvId
+      if (!currentConvId && resolvedConvId) {
+        setCurrentConvId(resolvedConvId)
       }
       loadConversations()
     } catch (err) {
@@ -127,6 +130,9 @@ export default function Chat() {
               : m,
           ),
         )
+        if (!currentConvId && headerConvId) {
+          setCurrentConvId(headerConvId)
+        }
       }
     } finally {
       setIsStreaming(false)

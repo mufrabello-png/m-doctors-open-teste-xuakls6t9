@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-07-22T19:03:21.084Z",
+  "generatedAt": "2026-07-22T19:12:43.612Z",
   "collections": [
     {
       "name": "users",
@@ -340,9 +340,18 @@
           "required": false,
           "system": false,
           "autodateTriggers": ["onCreate", "onUpdate"]
+        },
+        {
+          "name": "conversation_id",
+          "type": "text",
+          "required": false,
+          "system": false
         }
       ],
-      "indexes": ["CREATE INDEX idx_historico_consultas_user_id ON historico_consultas (user_id)"]
+      "indexes": [
+        "CREATE INDEX idx_historico_consultas_user_id ON historico_consultas (user_id)",
+        "CREATE INDEX `idx_historico_consultas_conv_id` ON `historico_consultas` (conversation_id)"
+      ]
     },
     {
       "name": "hospitals",

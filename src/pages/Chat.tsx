@@ -1,14 +1,25 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Send, Plus, MessageSquare, Loader2, Bot, Clock } from 'lucide-react'
+import {
+  Send,
+  Plus,
+  MessageSquare,
+  Loader2,
+  Bot,
+  Clock,
+  AlertCircle,
+  RefreshCw,
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn } from '@/lib/utils'
-import { streamAgentChat, displayableMessages } from '@/lib/skipAi'
+import { streamAgentChat } from '@/lib/skipAi'
 import pb from '@/lib/pocketbase/client'
+import { useAuth } from '@/hooks/use-auth'
 import {
   getConversations,
-  getMessages,
+  getHistoricoByConversation,
+  saveHistorico,
   streamChatUrl,
   type Conversation,
   type DisplayableMessage,
@@ -28,6 +39,7 @@ function formatConversationDate(dateStr: string): string {
 }
 
 export default function Chat() {
+  const { user } = useAuth()
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [currentConvId, setCurrentConvId] = useState<string | null>(null)
   const [messages, setMessages] = useState<DisplayableMessage[]>([])
@@ -35,6 +47,7 @@ export default function Chat() {
   const [isStreaming, setIsStreaming] = useState(false)
   const [loadingConv, setLoadingConv] = useState(false)
   const [loadingMsgs, setLoadingMsgs] = useState(false)
+  const [historyError, setHistoryError] = useState(false)
   const abortRef = useRef<AbortController | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
 
@@ -58,12 +71,18 @@ export default function Chat() {
 
   const loadMessages = useCallback(async (convId: string) => {
     setLoadingMsgs(true)
+    setHistoryError(false)
     try {
-      const res = await getMessages(convId)
-      const msgs = displayableMessages(res.messages || [])
-      setMessages(msgs as DisplayableMessage[])
+      const records = await getHistoricoByConversation(convId)
+      const msgs: DisplayableMessage[] = []
+      for (const r of records) {
+        if (r.pergunta) msgs.push({ id: `u-${r.id}`, role: 'user', content: r.pergunta })
+        if (r.resposta) msgs.push({ id: `a-${r.id}`, role: 'assistant', content: r.resposta })
+      }
+      setMessages(msgs)
     } catch (err) {
       console.error(`[Chat] Failed to load messages for conversation ${convId}:`, err)
+      setHistoryError(true)
       setMessages([])
     } finally {
       setLoadingMsgs(false)
@@ -93,7 +112,7 @@ export default function Chat() {
     setIsStreaming(true)
     const controller = new AbortController()
     abortRef.current = controller
-    let headerConvId: string | null = null
+
     try {
       const res = await fetch(streamChatUrl, {
         method: 'POST',
@@ -101,7 +120,7 @@ export default function Chat() {
         body: JSON.stringify({ message: text, conversation_id: currentConvId }),
         signal: controller.signal,
       })
-      headerConvId = res.headers.get('X-Conversation-Id')
+
       const result = await streamAgentChat(res, {
         onChunk: (_delta, full) => {
           setMessages((prev) =>
@@ -110,15 +129,22 @@ export default function Chat() {
         },
         signal: controller.signal,
       })
+
       if (result.content) {
         setMessages((prev) =>
           prev.map((m) => (m.id === assistantMsg.id ? { ...m, content: result.content } : m)),
         )
       }
-      const resolvedConvId = result.conversation_id || headerConvId
+
+      const resolvedConvId = result.conversation_id
       if (!currentConvId && resolvedConvId) {
         setCurrentConvId(resolvedConvId)
       }
+
+      if (user && resolvedConvId) {
+        saveHistorico(user.id, resolvedConvId, text, result.content).catch(() => {})
+      }
+
       loadConversations()
     } catch (err) {
       if ((err as Error)?.name !== 'AbortError') {
@@ -130,9 +156,6 @@ export default function Chat() {
               : m,
           ),
         )
-        if (!currentConvId && headerConvId) {
-          setCurrentConvId(headerConvId)
-        }
       }
     } finally {
       setIsStreaming(false)
@@ -141,12 +164,11 @@ export default function Chat() {
   }
 
   const handleNewChat = () => {
-    if (isStreaming) {
-      abortRef.current?.abort()
-    }
+    if (isStreaming) abortRef.current?.abort()
     setCurrentConvId(null)
     setMessages([])
     setInput('')
+    setHistoryError(false)
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -200,7 +222,23 @@ export default function Chat() {
       </div>
       <div className="flex-1 flex flex-col min-w-0">
         <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-4">
-          {messages.length === 0 ? (
+          {loadingMsgs ? (
+            <div className="flex justify-center p-8">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : historyError ? (
+            <div className="flex flex-col items-center justify-center h-full text-center space-y-3">
+              <AlertCircle className="h-8 w-8 text-destructive" />
+              <p className="text-muted-foreground">Falha ao carregar o histórico da conversa.</p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => currentConvId && loadMessages(currentConvId)}
+              >
+                <RefreshCw className="h-4 w-4 mr-2" /> Tentar novamente
+              </Button>
+            </div>
+          ) : messages.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-center space-y-3">
               <div className="rounded-full bg-primary/10 p-4">
                 <Bot className="h-8 w-8 text-primary" />
@@ -210,10 +248,6 @@ export default function Chat() {
                 Pergunte sobre escalas, plantões, horários e muito mais. O assistente tem
                 consciência temporal em tempo real.
               </p>
-            </div>
-          ) : loadingMsgs ? (
-            <div className="flex justify-center p-8">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
           ) : (
             messages.map((m) => (

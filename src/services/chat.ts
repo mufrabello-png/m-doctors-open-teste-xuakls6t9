@@ -23,6 +23,16 @@ export interface DisplayableMessage {
   created?: string
 }
 
+export interface HistoricoRecord {
+  id: string
+  user_id: string
+  conversation_id: string
+  pergunta: string
+  resposta: string
+  created: string
+  updated: string
+}
+
 export const sendChat = (message: string, conversationId?: string) =>
   pb.send('/backend/v1/chat', {
     method: 'POST',
@@ -41,3 +51,22 @@ export const getMessages = (conversationId: string) =>
   pb.send(`/backend/v1/chat/conversations/${conversationId}/messages`, {
     method: 'GET',
   }) as Promise<{ messages: AgentMessage[] }>
+
+export const saveHistorico = (
+  userId: string,
+  conversationId: string,
+  pergunta: string,
+  resposta: string,
+) =>
+  pb.collection('historico_consultas').create({
+    user_id: userId,
+    conversation_id: conversationId,
+    pergunta,
+    resposta,
+  }) as Promise<HistoricoRecord>
+
+export const getHistoricoByConversation = (conversationId: string) =>
+  pb.collection('historico_consultas').getFullList({
+    filter: `conversation_id = "${conversationId}"`,
+    sort: 'created',
+  }) as Promise<HistoricoRecord[]>

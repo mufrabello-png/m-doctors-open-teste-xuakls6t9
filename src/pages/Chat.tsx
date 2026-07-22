@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Send, Plus, MessageSquare, Loader2, Bot } from 'lucide-react'
+import { Send, Plus, MessageSquare, Loader2, Bot, Clock } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -13,6 +13,19 @@ import {
   type Conversation,
   type DisplayableMessage,
 } from '@/services/chat'
+
+function formatConversationDate(dateStr: string): string {
+  const date = new Date(dateStr)
+  const now = new Date()
+  const diffMs = now.getTime() - date.getTime()
+  const diffHours = diffMs / (1000 * 60 * 60)
+  if (diffHours < 24) {
+    return date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+  }
+  const diffDays = diffMs / (1000 * 60 * 60 * 24)
+  if (diffDays < 48) return 'Ontem'
+  return date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
+}
 
 export default function Chat() {
   const [conversations, setConversations] = useState<Conversation[]>([])
@@ -31,7 +44,8 @@ export default function Chat() {
       const res = await getConversations()
       const list = Array.isArray(res) ? res : (res as { items: Conversation[] }).items || []
       setConversations(list)
-    } catch (_) {
+    } catch (err) {
+      console.error('[Chat] Failed to load conversations:', err)
       setConversations([])
     } finally {
       setLoadingConv(false)
@@ -48,7 +62,8 @@ export default function Chat() {
       const res = await getMessages(convId)
       const msgs = displayableMessages(res.messages || [])
       setMessages(msgs as DisplayableMessage[])
-    } catch (_) {
+    } catch (err) {
+      console.error(`[Chat] Failed to load messages for conversation ${convId}:`, err)
       setMessages([])
     } finally {
       setLoadingMsgs(false)
@@ -85,8 +100,6 @@ export default function Chat() {
         body: JSON.stringify({ message: text, conversation_id: currentConvId }),
         signal: controller.signal,
       })
-      const convId = res.headers.get('X-Conversation-Id')
-      if (convId && !currentConvId) setCurrentConvId(convId)
       const result = await streamAgentChat(res, {
         onChunk: (_delta, full) => {
           setMessages((prev) =>
@@ -100,9 +113,13 @@ export default function Chat() {
           prev.map((m) => (m.id === assistantMsg.id ? { ...m, content: result.content } : m)),
         )
       }
+      if (!currentConvId && result.conversation_id) {
+        setCurrentConvId(result.conversation_id)
+      }
       loadConversations()
     } catch (err) {
       if ((err as Error)?.name !== 'AbortError') {
+        console.error('[Chat] Failed to send message:', err)
         setMessages((prev) =>
           prev.map((m) =>
             m.id === assistantMsg.id
@@ -155,12 +172,20 @@ export default function Chat() {
                   key={c.id}
                   onClick={() => setCurrentConvId(c.id)}
                   className={cn(
-                    'w-full flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-left transition-colors hover:bg-muted',
-                    currentConvId === c.id && 'bg-muted font-medium',
+                    'w-full flex flex-col gap-1 rounded-lg px-3 py-2 text-sm text-left transition-colors hover:bg-muted',
+                    currentConvId === c.id && 'bg-muted',
                   )}
                 >
-                  <MessageSquare className="h-4 w-4 shrink-0" />
-                  <span className="truncate">{c.title || 'Conversa'}</span>
+                  <div className="flex items-center gap-2">
+                    <MessageSquare className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    <span className="truncate flex-1 font-medium">
+                      {c.title || 'Nova conversa'}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1 pl-6 text-xs text-muted-foreground">
+                    <Clock className="h-3 w-3" />
+                    <span>{formatConversationDate(c.updated || c.created)}</span>
+                  </div>
                 </button>
               ))}
             </div>

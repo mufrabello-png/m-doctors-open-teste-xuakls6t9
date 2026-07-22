@@ -56,9 +56,15 @@ routerAdd(
 
       const enhancedMessage = dateContext + '\n\n--- Pergunta do Usuário ---\n' + body.message
 
+      const conv = $ai.agent('chat-orquestrador').getOrCreateConversation({
+        user_id: userId,
+        id: body.conversation_id || null,
+        title: body.conversation_id ? '' : (body.message || '').substring(0, 60),
+      })
+
       const result = $ai.agent('chat-orquestrador').chat({
         user_id: userId,
-        conversation_id: body.conversation_id || null,
+        conversation_id: conv.id,
         message: enhancedMessage,
       })
 

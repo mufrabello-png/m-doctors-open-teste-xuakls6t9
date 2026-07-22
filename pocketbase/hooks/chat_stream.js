@@ -59,6 +59,7 @@ routerAdd(
       const conv = $ai.agent('chat-orquestrador').getOrCreateConversation({
         user_id: userId,
         id: body.conversation_id || null,
+        title: body.conversation_id ? '' : (body.message || '').substring(0, 60),
       })
 
       const iter = $ai.agent('chat-orquestrador').chat({

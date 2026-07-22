@@ -52,7 +52,7 @@ routerAdd(
           'Sábado',
         ][spTime.getDay()] +
         '\n\n' +
-        'Use as ferramentas de busca (plantoes, hospitals, shifts) para responder à pergunta abaixo. NÃO há limite de registros — busque com filtros apropriados no banco de dados completo.'
+        'Use as ferramentas de busca (plantoes, hospitals, shifts) para responder à pergunta abaixo. NÃO há limite de registros — busque com filtros apropriados no banco de dados completo.\n\nIMPORTANTE: As ferramentas retornam resultados paginados (máximo 500 por página). Você DEVE paginar usando os parâmetros page e perPage até esgotar TODOS os resultados. NUNCA trunque ou omita registros. Liste TODOS os registros encontrados na resposta.'
 
       const enhancedMessage = dateContext + '\n\n--- Pergunta do Usuário ---\n' + body.message
 

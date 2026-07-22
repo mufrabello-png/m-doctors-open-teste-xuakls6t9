@@ -1,6 +1,6 @@
 routerAdd(
   'POST',
-  '/backend/v1/chat',
+  '/backend/v1/chat/stream',
   (e) => {
     try {
       const body = e.requestInfo().body || {}
@@ -45,27 +45,23 @@ routerAdd(
 
       const enhancedMessage = body.message + '\n\n--- Contexto do Sistema ---\n' + ctx
 
-      const result = $ai.agent('doctor-assistant').chat({
+      const conv = $ai.agent('doctor-assistant').getOrCreateConversation({
         user_id: userId,
-        conversation_id: body.conversation_id || null,
+        id: body.conversation_id || null,
+      })
+
+      const iter = $ai.agent('doctor-assistant').chat({
+        user_id: userId,
+        conversation_id: conv.id,
         message: enhancedMessage,
+        stream: true,
       })
 
-      try {
-        const histCol = $app.findCollectionByNameOrId('historico_consultas')
-        const histRecord = new Record(histCol)
-        histRecord.set('user_id', userId)
-        histRecord.set('pergunta', body.message)
-        histRecord.set('resposta', result.content || '')
-        $app.save(histRecord)
-      } catch (_) {}
+      e.response.header().set('Content-Type', 'text/event-stream')
+      e.response.header().set('Cache-Control', 'no-cache')
+      e.response.header().set('X-Conversation-Id', conv.id)
 
-      return e.json(200, {
-        conversation_id: result.conversation_id,
-        content: result.content,
-        citations: result.citations,
-        message_id: result.message_id,
-      })
+      $response.stream(e, iter)
     } catch (err) {
       if (err instanceof SkipAiConfigError)
         return e.json(503, { error: 'AI temporariamente indisponível' })

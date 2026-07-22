@@ -1,584 +1,238 @@
-import { useState, useRef, useEffect } from 'react'
-import { Card } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { Send, Plus, MessageSquare, Loader2, Bot } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert'
-import {
-  Send,
-  Bot,
-  User,
-  Loader2,
-  RefreshCw,
-  AlertCircle,
-  MessageSquare,
-  Activity,
-} from 'lucide-react'
+import { Textarea } from '@/components/ui/textarea'
+import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn } from '@/lib/utils'
+import { streamAgentChat, displayableMessages } from '@/lib/skipAi'
 import pb from '@/lib/pocketbase/client'
-import { useToast } from '@/hooks/use-toast'
-import { useAuth } from '@/hooks/use-auth'
-import { useLocation } from 'react-router-dom'
-
-export interface DisplayMessage {
-  id: string
-  role: 'user' | 'assistant' | 'error'
-  content: string
-  created: string
-  onRetry?: () => void
-}
-
-const DUMMY_QUESTIONS = [
-  'Quais são os meus próximos plantões?',
-  'Quem está escalado para a UTI pediátrica amanhã?',
-  'Quais plantões estão disponíveis no final de semana?',
-]
-
-const MAX_RETRIES = 3
-const RETRY_DELAYS = [2000, 4000, 8000]
-
-const formatInline = (text: string) => {
-  const parts = text.split(/(\*\*.*?\*\*)/g)
-  return parts.map((part, i) => {
-    if (part.startsWith('**') && part.endsWith('**')) {
-      return (
-        <strong key={i} className="font-bold">
-          {part.slice(2, -2)}
-        </strong>
-      )
-    }
-    return part
-  })
-}
-
-const renderMarkdown = (text: string) => {
-  const blocks = text.split('\n\n').filter(Boolean)
-  return blocks.map((block, i) => {
-    if (block.trim().toUpperCase().startsWith('ALERTA:')) {
-      return (
-        <Alert
-          key={i}
-          variant="destructive"
-          className="my-2 bg-destructive/10 text-destructive border-destructive/20 p-3"
-        >
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle className="ml-2 font-bold">Alerta</AlertTitle>
-          <AlertDescription className="ml-2 mt-1 block">
-            {formatInline(block.replace(/^ALERTA:\s*/i, ''))}
-          </AlertDescription>
-        </Alert>
-      )
-    }
-
-    const lines = block.split('\n')
-    if (lines.length > 0 && lines.every((line) => line.trim().match(/^[-*]\s/))) {
-      return (
-        <ul key={i} className="list-disc pl-5 my-2 space-y-1">
-          {lines.map((line, j) => (
-            <li key={j}>{formatInline(line.replace(/^[-*]\s*/, ''))}</li>
-          ))}
-        </ul>
-      )
-    }
-
-    return (
-      <p key={i} className="my-2 leading-relaxed">
-        {formatInline(block)}
-      </p>
-    )
-  })
-}
+import {
+  getConversations,
+  getMessages,
+  streamChatUrl,
+  type Conversation,
+  type DisplayableMessage,
+} from '@/services/chat'
 
 export default function Chat() {
-  const { user } = useAuth()
-  const location = useLocation()
-  const initialMessage = location.state?.initialMessage as string | undefined
-  const [messages, setMessages] = useState<DisplayMessage[]>([])
+  const [conversations, setConversations] = useState<Conversation[]>([])
+  const [currentConvId, setCurrentConvId] = useState<string | null>(null)
+  const [messages, setMessages] = useState<DisplayableMessage[]>([])
   const [input, setInput] = useState('')
-  const [isLoading, setIsLoading] = useState(false)
-  const [isSyncing, setIsSyncing] = useState(false)
-  const [isTesting, setIsTesting] = useState(false)
-  const [isInitialLoad, setIsInitialLoad] = useState(true)
-  const bottomRef = useRef<HTMLDivElement>(null)
-  const { toast } = useToast()
-  const abortControllerRef = useRef<AbortController | null>(null)
+  const [isStreaming, setIsStreaming] = useState(false)
+  const [loadingConv, setLoadingConv] = useState(false)
+  const [loadingMsgs, setLoadingMsgs] = useState(false)
+  const abortRef = useRef<AbortController | null>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
-    const loadHistory = async () => {
-      if (!user) return
-      try {
-        const history = await pb.collection('historico_consultas').getList(1, 50, {
-          sort: '-created',
-        })
-        const loaded: DisplayMessage[] = []
-        history.items.reverse().forEach((h) => {
-          loaded.push({
-            id: h.id + '_q',
-            role: 'user',
-            content: h.pergunta,
-            created: h.created,
-          })
-          if (h.resposta) {
-            loaded.push({
-              id: h.id + '_a',
-              role: 'assistant',
-              content: h.resposta,
-              created: h.created,
-            })
-          }
-        })
-        setMessages(loaded)
-      } catch (err) {
-        console.error(err)
-      } finally {
-        setIsInitialLoad(false)
-      }
-    }
-    loadHistory()
-  }, [user])
-
-  useEffect(() => {
-    if (initialMessage && !isInitialLoad) {
-      setInput(initialMessage)
-      window.history.replaceState({}, document.title)
-    }
-  }, [initialMessage, isInitialLoad])
-
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages, isLoading])
-
-  const formatTime = (isoString: string) => {
+  const loadConversations = useCallback(async () => {
+    setLoadingConv(true)
     try {
-      return new Date(isoString).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    } catch {
-      return ''
-    }
-  }
-
-  const handleSync = async () => {
-    setIsSyncing(true)
-    try {
-      const res = await pb.send('/backend/v1/shifts/sync', { method: 'POST' })
-      toast({
-        title: 'Sincronização concluída',
-        description: `A API retornou ${res.receivedShifts ?? 0} escalas e ${res.syncedShifts ?? 0} foram gravadas.`,
-      })
-    } catch (err: any) {
-      const isAuthError = err.status === 401 || err.status === 403
-      const errMsg =
-        err.response?.error ||
-        (isAuthError
-          ? 'Token DUUID expirado ou inválido. Atualize o DUUID_TOKEN.'
-          : err.message || 'Não foi possível sincronizar os dados.')
-      toast({
-        title: isAuthError ? 'Autenticação Necessária' : 'Erro na sincronização',
-        description: errMsg,
-        variant: 'destructive',
-      })
+      const res = await getConversations()
+      const list = Array.isArray(res) ? res : (res as { items: Conversation[] }).items || []
+      setConversations(list)
+    } catch (_) {
+      setConversations([])
     } finally {
-      setIsSyncing(false)
+      setLoadingConv(false)
     }
-  }
+  }, [])
 
-  const handleTestConnection = async () => {
-    setIsTesting(true)
+  useEffect(() => {
+    loadConversations()
+  }, [loadConversations])
+
+  const loadMessages = useCallback(async (convId: string) => {
+    setLoadingMsgs(true)
     try {
-      await pb.send('/backend/v1/doctor-id/test-connection', { method: 'GET' })
-      toast({
-        title: 'Conexão Bem Sucedida',
-        description: 'A API Doctor ID está acessível e respondendo corretamente.',
-      })
-    } catch (err: any) {
-      const isAuthError = err.status === 401 || err.status === 403
-      const errMsg =
-        err.response?.error ||
-        (isAuthError
-          ? 'Token DUUID expirado ou inválido. Atualize o DUUID_TOKEN.'
-          : err.message || 'Falha ao testar conexão.')
-
-      toast({
-        title: isAuthError ? 'Erro de Autenticação' : 'Erro de Conexão',
-        description: errMsg,
-        variant: 'destructive',
-      })
+      const res = await getMessages(convId)
+      const msgs = displayableMessages(res.messages || [])
+      setMessages(msgs as DisplayableMessage[])
+    } catch (_) {
+      setMessages([])
     } finally {
-      setIsTesting(false)
+      setLoadingMsgs(false)
     }
-  }
+  }, [])
 
-  const [toolStatus, setToolStatus] = useState<string | null>(null)
+  useEffect(() => {
+    if (currentConvId) loadMessages(currentConvId)
+    else setMessages([])
+  }, [currentConvId, loadMessages])
 
-  const fetchWithRetry = async (
-    text: string,
-    signal: AbortSignal,
-    retryCount = 0,
-  ): Promise<string> => {
-    try {
-      const res = await fetch(
-        `${import.meta.env.VITE_POCKETBASE_URL}/backend/v1/chat-orquestrador`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: pb.authStore.token },
-          body: JSON.stringify({ message: text }),
-          signal,
-        },
-      )
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
+  }, [messages])
 
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}))
-
-        if (res.status === 400 || res.status === 401 || res.status === 403 || res.status === 429) {
-          throw new Error(
-            errorData.error || 'Erro de autenticação, limite de uso ou requisição inválida.',
-          )
-        }
-
-        if (res.status >= 500 && res.status <= 504) {
-          if (retryCount < MAX_RETRIES) {
-            await new Promise((resolve) => setTimeout(resolve, RETRY_DELAYS[retryCount]))
-            if (signal.aborted) throw new Error('Aborted')
-            return fetchWithRetry(text, signal, retryCount + 1)
-          }
-        }
-
-        throw new Error(
-          errorData.error ||
-            'Serviço temporariamente indisponível. Tente novamente em alguns instantes.',
-        )
-      }
-
-      const reader = res.body?.getReader()
-      if (!reader) throw new Error('Failed to read response stream')
-      const decoder = new TextDecoder()
-      let answer = ''
-      let buffer = ''
-      let finalError = ''
-
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        buffer += decoder.decode(value, { stream: true })
-        const parts = buffer.split('\n\n')
-        buffer = parts.pop() || ''
-
-        for (const part of parts) {
-          const lines = part.split('\n')
-          let event = 'message'
-          let data = ''
-          for (const line of lines) {
-            if (line.startsWith('event: ')) event = line.slice(7).trim()
-            else if (line.startsWith('data: ')) data = line.slice(6).trim()
-          }
-          if (data) {
-            try {
-              const parsed = JSON.parse(data)
-              if (event === 'status') {
-                setToolStatus(parsed.message)
-              } else if (event === 'done') {
-                answer = parsed.content
-              } else if (event === 'error') {
-                finalError = parsed.error || 'Erro no processamento'
-              }
-            } catch {
-              /* intentionally ignored */
-            }
-          }
-        }
-      }
-
-      if (finalError) throw new Error(finalError)
-      return answer
-    } catch (err: any) {
-      if (err.name === 'TypeError' || err.message === 'Failed to fetch') {
-        if (retryCount < MAX_RETRIES) {
-          await new Promise((resolve) => setTimeout(resolve, RETRY_DELAYS[retryCount]))
-          if (signal.aborted) throw new Error('Aborted')
-          return fetchWithRetry(text, signal, retryCount + 1)
-        }
-        throw new Error(
-          'Serviço temporariamente indisponível. Tente novamente em alguns instantes.',
-        )
-      }
-      throw err
-    }
-  }
-
-  const handleSend = async (eOrText?: React.FormEvent | string) => {
-    if (eOrText && typeof eOrText !== 'string') {
-      eOrText.preventDefault()
-    }
-
-    const text = typeof eOrText === 'string' ? eOrText : input
-
-    if (!text.trim() || isLoading) return
-
+  const handleSend = async () => {
+    const text = input.trim()
+    if (!text || isStreaming) return
     setInput('')
-    setIsLoading(true)
-    setToolStatus(null)
-
-    const userMsgId = Date.now().toString()
-    const userMsg: DisplayMessage = {
-      id: userMsgId,
-      role: 'user',
-      content: text,
-      created: new Date().toISOString(),
+    const userMsg: DisplayableMessage = { id: `u-${Date.now()}`, role: 'user', content: text }
+    const assistantMsg: DisplayableMessage = {
+      id: `a-${Date.now()}`,
+      role: 'assistant',
+      content: '',
     }
-
-    setMessages((prev) => [...prev.filter((m) => m.role !== 'error'), userMsg])
-
+    setMessages((prev) => [...prev, userMsg, assistantMsg])
+    setIsStreaming(true)
     const controller = new AbortController()
-    abortControllerRef.current = controller
-
+    abortRef.current = controller
     try {
-      const answer = await fetchWithRetry(text, controller.signal)
-
-      const assistantMsg: DisplayMessage = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: answer || 'Não foi possível gerar uma resposta.',
-        created: new Date().toISOString(),
+      const res = await fetch(streamChatUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: pb.authStore.token || '' },
+        body: JSON.stringify({ message: text, conversation_id: currentConvId }),
+        signal: controller.signal,
+      })
+      const convId = res.headers.get('X-Conversation-Id')
+      if (convId && !currentConvId) setCurrentConvId(convId)
+      const result = await streamAgentChat(res, {
+        onChunk: (_delta, full) => {
+          setMessages((prev) =>
+            prev.map((m) => (m.id === assistantMsg.id ? { ...m, content: full } : m)),
+          )
+        },
+        signal: controller.signal,
+      })
+      if (result.content) {
+        setMessages((prev) =>
+          prev.map((m) => (m.id === assistantMsg.id ? { ...m, content: result.content } : m)),
+        )
       }
-
-      setMessages((prev) => [...prev, assistantMsg])
-    } catch (err: any) {
-      if (err.message === 'Aborted') return
-
-      const errorMsg: DisplayMessage = {
-        id: (Date.now() + 1).toString(),
-        role: 'error',
-        content: err.message,
-        created: new Date().toISOString(),
-        onRetry: () => handleSend(text),
+      loadConversations()
+    } catch (err) {
+      if ((err as Error)?.name !== 'AbortError') {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantMsg.id
+              ? { ...m, content: 'Erro ao processar a mensagem. Tente novamente.' }
+              : m,
+          ),
+        )
       }
-      setMessages((prev) => [...prev, errorMsg])
     } finally {
-      setIsLoading(false)
-      setToolStatus(null)
-      abortControllerRef.current = null
+      setIsStreaming(false)
+      abortRef.current = null
+    }
+  }
+
+  const handleNewChat = () => {
+    if (isStreaming) {
+      abortRef.current?.abort()
+    }
+    setCurrentConvId(null)
+    setMessages([])
+    setInput('')
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      handleSend()
     }
   }
 
   return (
-    <div className="flex flex-col h-[calc(100vh-140px)] w-full max-w-4xl mx-auto">
-      <div className="mb-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">Assistente Inteligente</h2>
-          <p className="text-muted-foreground">
-            Tire dúvidas em linguagem natural sobre escalas, horários e médicos.
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleTestConnection}
-            disabled={isTesting || isSyncing}
-            className="shadow-sm"
-          >
-            {isTesting ? (
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-            ) : (
-              <Activity className="h-4 w-4 mr-2" />
-            )}
-            Testar Conexão
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleSync}
-            disabled={isSyncing || isTesting}
-            className="shadow-sm"
-          >
-            {isSyncing ? (
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-            ) : (
-              <RefreshCw className="h-4 w-4 mr-2" />
-            )}
-            Sincronizar Escalas
+    <div className="flex h-[calc(100vh-4rem)] overflow-hidden">
+      <div className="hidden md:flex w-64 flex-col border-r bg-muted/30 shrink-0">
+        <div className="p-3">
+          <Button onClick={handleNewChat} className="w-full" variant="outline">
+            <Plus className="h-4 w-4 mr-2" /> Nova Conversa
           </Button>
         </div>
-      </div>
-
-      <Card className="flex-1 flex flex-col border-0 shadow-sm overflow-hidden bg-white/50 backdrop-blur-sm relative">
-        <div className="flex-1 overflow-y-auto p-4 space-y-6">
-          {isInitialLoad && (
-            <div className="h-full flex items-center justify-center">
-              <Loader2 className="h-8 w-8 animate-spin text-primary/40" />
+        <ScrollArea className="flex-1 px-2">
+          {loadingConv ? (
+            <div className="flex justify-center p-4">
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
             </div>
-          )}
-
-          {!isInitialLoad && messages.length === 0 && (
-            <div className="h-full flex flex-col items-center justify-center text-center p-8 space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-              <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center">
-                <MessageSquare className="w-8 h-8 text-primary" />
-              </div>
-              <div className="max-w-md space-y-2">
-                <h3 className="text-xl font-semibold">Como posso ajudar?</h3>
-                <p className="text-muted-foreground">
-                  Sou seu assistente virtual para escalas médicas. Pergunte sobre horários,
-                  especialidades ou disponibilidade de plantões.
-                </p>
-              </div>
-              <div className="grid gap-3 w-full max-w-md mt-4">
-                {DUMMY_QUESTIONS.map((q, i) => (
-                  <Button
-                    key={i}
-                    variant="outline"
-                    className="justify-start h-auto py-3 px-4 text-left whitespace-normal hover:bg-primary/5 transition-colors"
-                    onClick={() => handleSend(q)}
-                  >
-                    {q}
-                  </Button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {!isInitialLoad &&
-            messages.map((msg) => {
-              if (msg.role === 'error') {
-                return (
-                  <div
-                    key={msg.id}
-                    className="flex gap-3 max-w-[85%] animate-in fade-in duration-300"
-                  >
-                    <Avatar className="h-8 w-8 mt-1 border border-destructive/20 shrink-0">
-                      <AvatarFallback className="bg-destructive/10 text-destructive">
-                        <AlertCircle className="h-4 w-4" />
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="flex flex-col gap-2 items-start w-full">
-                      <div className="bg-destructive/10 text-destructive rounded-2xl rounded-tl-sm border border-destructive/20 px-4 py-2.5 text-sm md:text-base">
-                        {msg.content}
-                      </div>
-                      {msg.onRetry && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={msg.onRetry}
-                          className="text-xs h-8 hover:bg-destructive/5"
-                        >
-                          <RefreshCw className="w-3 h-3 mr-2" />
-                          Tentar novamente
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                )
-              }
-
-              return (
-                <div
-                  key={msg.id}
+          ) : conversations.length === 0 ? (
+            <p className="text-sm text-muted-foreground p-4 text-center">Nenhuma conversa ainda</p>
+          ) : (
+            <div className="space-y-1 pb-2">
+              {conversations.map((c) => (
+                <button
+                  key={c.id}
+                  onClick={() => setCurrentConvId(c.id)}
                   className={cn(
-                    'flex gap-3 max-w-[85%] animate-in fade-in duration-300',
-                    msg.role === 'user' ? 'ml-auto flex-row-reverse' : '',
+                    'w-full flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-left transition-colors hover:bg-muted',
+                    currentConvId === c.id && 'bg-muted font-medium',
                   )}
                 >
-                  <Avatar className="h-8 w-8 mt-1 border border-border shrink-0">
-                    {msg.role === 'assistant' ? (
-                      <>
-                        <AvatarImage src="" />
-                        <AvatarFallback className="bg-primary/10 text-primary">
-                          <Bot className="h-4 w-4" />
-                        </AvatarFallback>
-                      </>
-                    ) : (
-                      <>
-                        <AvatarImage src="https://img.usecurling.com/ppl/thumbnail?gender=female&seed=2" />
-                        <AvatarFallback>
-                          <User className="h-4 w-4" />
-                        </AvatarFallback>
-                      </>
-                    )}
-                  </Avatar>
-                  <div
-                    className={cn(
-                      'flex flex-col gap-1',
-                      msg.role === 'user' ? 'items-end' : 'items-start',
-                    )}
-                  >
-                    <div
-                      className={cn(
-                        'rounded-2xl px-4 py-2.5 text-sm md:text-base whitespace-pre-wrap',
-                        msg.role === 'user'
-                          ? 'bg-primary text-primary-foreground rounded-tr-sm'
-                          : 'bg-muted text-foreground rounded-tl-sm border border-border/50',
-                      )}
-                    >
-                      {msg.role === 'assistant' ? renderMarkdown(msg.content) : msg.content}
-                    </div>
-                    <span className="text-[10px] text-muted-foreground px-1">
-                      {formatTime(msg.created)}
-                    </span>
-                  </div>
-                </div>
-              )
-            })}
-
-          {isLoading && (
-            <div className="flex gap-3 max-w-[85%] animate-in fade-in duration-300">
-              <Avatar className="h-8 w-8 mt-1 border border-border shrink-0">
-                <AvatarImage src="" />
-                <AvatarFallback className="bg-primary/10 text-primary">
-                  <Bot className="h-4 w-4" />
-                </AvatarFallback>
-              </Avatar>
-              <div className="flex flex-col gap-1 items-start">
-                <div className="bg-muted text-foreground rounded-2xl rounded-tl-sm border border-border/50 px-4 py-3 flex flex-col gap-2 min-h-11">
-                  <div className="flex items-center gap-1.5 h-5">
-                    <span
-                      className="w-2 h-2 bg-muted-foreground/40 rounded-full animate-bounce"
-                      style={{ animationDelay: '0ms' }}
-                    />
-                    <span
-                      className="w-2 h-2 bg-muted-foreground/40 rounded-full animate-bounce"
-                      style={{ animationDelay: '150ms' }}
-                    />
-                    <span
-                      className="w-2 h-2 bg-muted-foreground/40 rounded-full animate-bounce"
-                      style={{ animationDelay: '300ms' }}
-                    />
-                  </div>
-                  {toolStatus && (
-                    <span className="text-xs text-muted-foreground italic flex items-center gap-1">
-                      <RefreshCw className="w-3 h-3 animate-spin" />
-                      {toolStatus}
-                    </span>
-                  )}
-                </div>
-              </div>
+                  <MessageSquare className="h-4 w-4 shrink-0" />
+                  <span className="truncate">{c.title || 'Conversa'}</span>
+                </button>
+              ))}
             </div>
           )}
-
-          <div ref={bottomRef} />
+        </ScrollArea>
+      </div>
+      <div className="flex-1 flex flex-col min-w-0">
+        <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-4">
+          {messages.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-full text-center space-y-3">
+              <div className="rounded-full bg-primary/10 p-4">
+                <Bot className="h-8 w-8 text-primary" />
+              </div>
+              <p className="text-muted-foreground text-lg font-medium">Assistente DoctorID</p>
+              <p className="text-sm text-muted-foreground max-w-md">
+                Pergunte sobre escalas, plantões, horários e muito mais. O assistente tem
+                consciência temporal em tempo real.
+              </p>
+            </div>
+          ) : loadingMsgs ? (
+            <div className="flex justify-center p-8">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : (
+            messages.map((m) => (
+              <div
+                key={m.id}
+                className={cn('flex gap-3', m.role === 'user' ? 'justify-end' : 'justify-start')}
+              >
+                {m.role === 'assistant' && (
+                  <div className="rounded-full bg-primary/10 p-2 shrink-0 mt-1">
+                    <Bot className="h-4 w-4 text-primary" />
+                  </div>
+                )}
+                <div
+                  className={cn(
+                    'max-w-[75%] rounded-xl px-4 py-2.5 text-sm whitespace-pre-wrap break-words',
+                    m.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-muted',
+                  )}
+                >
+                  {m.content || (isStreaming && m.role === 'assistant' ? '...' : '')}
+                </div>
+              </div>
+            ))
+          )}
         </div>
-
-        <div className="p-4 bg-background/80 backdrop-blur-md border-t border-border">
-          <form onSubmit={handleSend} className="flex gap-2 relative">
-            <Input
+        <div className="border-t p-4 shrink-0">
+          <div className="flex gap-2 max-w-3xl mx-auto items-end">
+            <Textarea
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="Pergunte sobre escalas, plantões ou médicos"
-              className="h-12 pl-4 pr-12 rounded-full border-border/50 bg-white focus-visible:ring-primary shadow-sm"
-              disabled={isLoading}
+              onKeyDown={handleKeyDown}
+              placeholder="Digite sua mensagem..."
+              className="resize-none min-h-[44px] max-h-32"
+              rows={1}
+              disabled={isStreaming}
             />
             <Button
-              type="submit"
+              onClick={handleSend}
+              disabled={!input.trim() || isStreaming}
               size="icon"
-              className="absolute right-1 top-1 h-10 w-10 rounded-full hover:scale-105 transition-transform"
-              disabled={!input.trim() || isLoading}
+              className="shrink-0 h-[44px] w-[44px]"
             >
-              {isLoading ? (
+              {isStreaming ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
                 <Send className="h-4 w-4" />
               )}
             </Button>
-          </form>
+          </div>
         </div>
-      </Card>
+      </div>
     </div>
   )
 }

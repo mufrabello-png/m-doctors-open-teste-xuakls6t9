@@ -180,6 +180,23 @@ routerAdd(
       return { date: '', time: '', hourMinute: '' }
     }
 
+    const removeAccents = (s) => {
+      if (!s) return ''
+      const accented = 'áàâãäéèêëíìîïóòôõöúùûüçÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇ'
+      const unaccented = 'aaaaaeeeeiiiiooooouuuucAAAAAEEEEIIIIOOOOOUUUUC'
+      let result = String(s)
+      for (let i = 0; i < accented.length; i++) {
+        result = result.split(accented[i]).join(unaccented[i])
+      }
+      return result
+    }
+
+    const normalizeVacant = (s) => {
+      if (!s) return false
+      const n = removeAccents(String(s)).toLowerCase().trim()
+      return n === 'sem profissional' || n === 'sem proficional'
+    }
+
     const cleanedShifts = []
     for (const raw of doctorIdShifts) {
       const idApi = String(raw.id || '')
@@ -187,6 +204,8 @@ routerAdd(
 
       let pessoaNome = raw.pessoaNome
       if (!pessoaNome || String(pessoaNome).trim() === '') {
+        pessoaNome = 'sem profissional'
+      } else if (normalizeVacant(pessoaNome)) {
         pessoaNome = 'sem profissional'
       }
 
@@ -213,7 +232,9 @@ routerAdd(
         valorApuradoFormatado: String(raw.valorApuradoFormatado || ''),
         periodicidade: String(raw.periodicidade || ''),
         diaDaSemana: String(raw.diaDaSemana || ''),
-        pessoaNomeAtribuicao: String(raw.pessoaNomeAtribuicao || ''),
+        pessoaNomeAtribuicao: normalizeVacant(raw.pessoaNomeAtribuicao)
+          ? 'sem profissional'
+          : String(raw.pessoaNomeAtribuicao || ''),
         substituicao: substituicaoText,
         pagamentoAVista: parseBool(raw.pagamentoAVista),
         pagamentoAntecipado: parseBool(raw.pagamentoAntecipado),

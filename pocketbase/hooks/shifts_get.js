@@ -30,7 +30,7 @@ routerAdd(
           type: shift.getString('tipoPlantaoNome'),
           value: shift.getString('valorFormatado'),
           status: pessoaNome && pessoaNome !== 'sem profissional' ? 'Atribuído' : 'Disponível',
-          available: pessoaNome === 'sem profissional',
+          available: !pessoaNome || pessoaNome === 'sem profissional',
           closed: shift.getBool('fechado'),
           durationHours: shift.getFloat('duracaoEmHoras'),
         }

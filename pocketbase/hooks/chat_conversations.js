@@ -7,7 +7,7 @@ routerAdd(
       if (!userId) return e.unauthorizedError('auth required')
       const limit = parseInt(e.requestInfo().query?.limit || '20', 10) || 20
       const result = $ai
-        .agent('doctor-assistant')
+        .agent('chat-orquestrador')
         .listConversations({ user_id: userId, limit: limit })
       return e.json(200, result)
     } catch (err) {

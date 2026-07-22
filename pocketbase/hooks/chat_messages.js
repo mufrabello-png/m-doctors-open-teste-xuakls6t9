@@ -7,7 +7,7 @@ routerAdd(
       if (!userId) return e.unauthorizedError('auth required')
       const conversationId = e.request.pathValue('conversationId')
       if (!conversationId) return e.badRequestError('conversationId is required')
-      const result = $ai.agent('doctor-assistant').listMessages({
+      const result = $ai.agent('chat-orquestrador').listMessages({
         conversation_id: conversationId,
         user_id: userId,
       })

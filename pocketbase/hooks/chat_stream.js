@@ -25,32 +25,43 @@ routerAdd(
         ':' +
         pad(d.getMinutes())
 
-      let plantoes = []
-      try {
-        plantoes = $app.findRecordsByFilter('plantoes', '', '-horarioInicioFormatado_data', 50, 0)
-      } catch (_) {}
+      const isoToday =
+        spTime.getFullYear() + '-' + pad(spTime.getMonth() + 1) + '-' + pad(spTime.getDate())
 
-      let ctx = 'Data/hora atual (São Paulo): ' + fmtDate(spTime) + '\n'
-      ctx += 'Amanhã: ' + fmtDate(tomorrow) + '\n\n'
-      ctx += 'Plantões (' + plantoes.length + '):\n'
-      for (const p of plantoes) {
-        ctx += '- ' + (p.getString('pessoaNome') || 'N/A')
-        ctx += ' | ' + (p.getString('instituicaoNome') || 'N/A')
-        ctx += ' | ' + (p.getString('especialidadeNome') || 'N/A')
-        ctx += ' | Início: ' + (p.getString('horarioInicioFormatado_data') || 'N/A')
-        ctx += ' | Término: ' + (p.getString('horarioTerminoFormatado_data') || 'N/A')
-        ctx += ' | Tipo: ' + (p.getString('tipoPlantaoNome') || 'N/A')
-        ctx += '\n'
-      }
+      const isoTomorrow =
+        tomorrow.getFullYear() + '-' + pad(tomorrow.getMonth() + 1) + '-' + pad(tomorrow.getDate())
 
-      const enhancedMessage = body.message + '\n\n--- Contexto do Sistema ---\n' + ctx
+      const dateContext =
+        'DATA/HORA ATUAL DO SISTEMA (São Paulo, UTC-3): ' +
+        fmtDate(spTime) +
+        '\n' +
+        'Data ISO de hoje: ' +
+        isoToday +
+        '\n' +
+        'Data ISO de amanhã: ' +
+        isoTomorrow +
+        '\n' +
+        'Dia da semana: ' +
+        [
+          'Domingo',
+          'Segunda-feira',
+          'Terça-feira',
+          'Quarta-feira',
+          'Quinta-feira',
+          'Sexta-feira',
+          'Sábado',
+        ][spTime.getDay()] +
+        '\n\n' +
+        'Use as ferramentas de busca (plantoes, hospitals, shifts) para responder à pergunta abaixo. NÃO há limite de registros — busque com filtros apropriados no banco de dados completo.'
 
-      const conv = $ai.agent('doctor-assistant').getOrCreateConversation({
+      const enhancedMessage = dateContext + '\n\n--- Pergunta do Usuário ---\n' + body.message
+
+      const conv = $ai.agent('chat-orquestrador').getOrCreateConversation({
         user_id: userId,
         id: body.conversation_id || null,
       })
 
-      const iter = $ai.agent('doctor-assistant').chat({
+      const iter = $ai.agent('chat-orquestrador').chat({
         user_id: userId,
         conversation_id: conv.id,
         message: enhancedMessage,

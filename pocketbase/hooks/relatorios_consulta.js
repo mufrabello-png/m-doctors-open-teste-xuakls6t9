@@ -5,6 +5,10 @@ routerAdd(
     const userId = e.auth?.id
     if (!userId) return e.unauthorizedError('auth required')
 
+    const now = new Date()
+    const pad = (n) => String(n).padStart(2, '0')
+    const todayISO = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
+
     const type = e.request.url.query().get('type') || 'vagas'
 
     if (type === 'vagas') {
@@ -37,7 +41,6 @@ routerAdd(
     }
 
     if (type === 'produtividade') {
-      const now = new Date()
       const firstDay = new Date(now.getFullYear(), now.getMonth(), 1)
         .toISOString()
         .replace('T', ' ')
@@ -84,7 +87,6 @@ routerAdd(
     }
 
     if (type === 'riscos') {
-      const now = new Date()
       const in48h = new Date(now.getTime() + 48 * 60 * 60 * 1000)
       const nowStr = now.toISOString().replace('T', ' ')
       const in48hStr = in48h.toISOString().replace('T', ' ')
@@ -117,7 +119,7 @@ routerAdd(
         const totalHigh = riscos.filter((r) => r.criticidade === 'alta').length
 
         if (totalRisks > 0) {
-          const prompt = `Como gestor experiente, forneça uma diretriz executiva curta (no máximo 3 linhas) com ações imediatas para mitigar os seguintes riscos operacionais de escalas hospitalares: Temos ${totalRisks} plantões descobertos nas próximas 48h, sendo ${totalHigh} deles críticos (nas próximas 24h).`
+          const prompt = `Como gestor experiente, forneça uma diretriz executiva curta (no máximo 3 linhas) com ações imediatas para mitigar os seguintes riscos operacionais de escalas hospitalares: Data de referência do servidor: ${todayISO}. Temos ${totalRisks} plantões descobertos nas próximas 48h, sendo ${totalHigh} deles críticos (nas próximas 24h).`
           const reply = $ai.chat({
             model: 'fast',
             messages: [
@@ -131,8 +133,7 @@ routerAdd(
           })
           recomendacao = reply.choices[0].message.content
         } else {
-          recomendacao =
-            'As escalas para as próximas 48h estão cobertas. Mantenha o monitoramento padrão.'
+          recomendacao = `As escalas para as próximas 48h (a partir de ${todayISO}) estão cobertas. Mantenha o monitoramento padrão.`
         }
       } catch (err) {
         $app.logger().error('AI recommendation error', 'err', err.message)

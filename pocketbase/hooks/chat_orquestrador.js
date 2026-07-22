@@ -27,6 +27,44 @@ routerAdd(
 
     const message = body.message.trim()
 
+    const now = new Date()
+    const pad = (n) => String(n).padStart(2, '0')
+    const todayISO = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
+    const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000)
+    const tomorrowISO = `${tomorrow.getFullYear()}-${pad(tomorrow.getMonth() + 1)}-${pad(tomorrow.getDate())}`
+    const dayAfterTomorrow = new Date(now.getTime() + 2 * 24 * 60 * 60 * 1000)
+    const dayAfterTomorrowISO = `${dayAfterTomorrow.getFullYear()}-${pad(dayAfterTomorrow.getMonth() + 1)}-${pad(dayAfterTomorrow.getDate())}`
+    const weekdayNames = [
+      'domingo',
+      'segunda-feira',
+      'terça-feira',
+      'quarta-feira',
+      'quinta-feira',
+      'sexta-feira',
+      'sábado',
+    ]
+    const monthNames = [
+      'janeiro',
+      'fevereiro',
+      'março',
+      'abril',
+      'maio',
+      'junho',
+      'julho',
+      'agosto',
+      'setembro',
+      'outubro',
+      'novembro',
+      'dezembro',
+    ]
+    const todayReadable = `${weekdayNames[now.getDay()]}, ${pad(now.getDate())} de ${monthNames[now.getMonth()]} de ${now.getFullYear()}`
+    const currentHour = `${pad(now.getHours())}:${pad(now.getMinutes())}`
+
+    const spTime = new Date(now.getTime() - 3 * 3600 * 1000)
+    const spTodayISO = `${spTime.getFullYear()}-${pad(spTime.getMonth() + 1)}-${pad(spTime.getDate())}`
+
+    const dateContext = `DATA E HORA ATUAL DO SERVIDOR: ${todayReadable} (horário: ${currentHour}). Data no formato ISO (YYYY-MM-DD): ${todayISO}. Amanhã: ${tomorrowISO}. Dia seguinte: ${dayAfterTomorrowISO}.\n\nINSTRUÇÕES DE CONTEXTO TEMPORAL:\n- "hoje", "agora", "hoje em diante" = ${todayISO}\n- "amanhã" = ${tomorrowISO}\n- "anteontem" = subtraia 2 dias de ${todayISO}\n- "ontem" = subtraia 1 dia de ${todayISO}\n- "esta semana" = da segunda-feira ao domingo da semana atual (baseado em ${todayISO})\n- "próxima semana" = segunda a domingo da semana seguinte\n- "este mês" = todos os dias do mês atual (${monthNames[now.getMonth()]}/${now.getFullYear()})\n- NUNCA use datas hardcoded ou de treinamento. Use SEMPRE a data do servidor fornecida acima como referência.\n- Quando o usuário perguntar sobre "hoje", converta para ${todayISO} antes de chamar a função get_plantoes.\n- Se o usuário perguntar qual data o sistema está usando, responda com a data atual: ${todayReadable}.`
+
     const openAiKey = $secrets.get('OPEN_AI')
     if (!openAiKey) {
       sendError(
@@ -111,7 +149,8 @@ routerAdd(
       {
         role: 'system',
         content:
-          'Você é o Oráculo de Escalas do Doctor ID. Responda em português claro, direto e factual. Para toda pergunta sobre plantões, escalas, médicos, hospitais, horários, disponibilidade, valores ou especialidades, consulte obrigatoriamente a função `get_plantoes` antes de responder. Extraia da pergunta os filtros de período, instituição, pessoa, especialidade e disponibilidade. Nunca diga apenas que está pesquisando: depois da consulta, entregue os resultados encontrados. Use exclusivamente os dados retornados pela função; não invente, complete ou suponha informações. Se houver zero resultados, diga quais filtros foram usados e informe que não houve correspondência. Se houver muitos resultados, informe o total encontrado e liste os mais relevantes, sem afirmar que a lista parcial é o total. Diferencie plantão disponível (pessoaNome igual a sem profissional) de plantão atribuído. Sempre informe data, horário, instituição, médico, especialidade e status quando existirem. Para perguntas ambíguas, faça uma pergunta curta de esclarecimento somente se não for possível pesquisar com segurança. Formate respostas com listas e destaque números, datas e horários em **negrito**.',
+          dateContext +
+          '\n\nVocê é o Oráculo de Escalas do Doctor ID. Responda em português claro, direto e factual. Para toda pergunta sobre plantões, escalas, médicos, hospitais, horários, disponibilidade, valores ou especialidades, consulte obrigatoriamente a função `get_plantoes` antes de responder. Extraia da pergunta os filtros de período, instituição, pessoa, especialidade e disponibilidade. Ao extrair filtros de período, converta termos relativos (hoje, amanhã, esta semana, etc.) para datas absolutas no formato YYYY-MM-DD usando a DATA E HORA ATUAL DO SERVIDOR fornecida acima. Nunca diga apenas que está pesquisando: depois da consulta, entregue os resultados encontrados. Use exclusivamente os dados retornados pela função; não invente, complete ou suponha informações. Se houver zero resultados, diga quais filtros foram usados (incluindo as datas) e informe que não houve correspondência. Se houver muitos resultados, informe o total encontrado e liste os mais relevantes, sem afirmar que a lista parcial é o total. Diferencie plantão disponível (pessoaNome igual a sem profissional) de plantão atribuído. Sempre informe data, horário, instituição, médico, especialidade e status quando existirem. Para perguntas ambíguas, faça uma pergunta curta de esclarecimento somente se não for possível pesquisar com segurança. Formate respostas com listas e destaque números, datas e horários em **negrito**. Se o usuário perguntar sobre a data atual ou qual data está sendo usada como referência, informe explicitamente a data do servidor.',
       },
       {
         role: 'user',
@@ -350,6 +389,24 @@ routerAdd(
               const dataInicio = normalizeDate(args.data_inicio)
               const dataFim = normalizeDate(args.data_fim) || dataInicio
               const limite = Math.min(Math.max(Number(args.limite) || 200, 1), 500)
+
+              const plantoes = $app.findRecordsByFilter(
+                'plantoes',
+                '',
+                '-horarioInicioFormatado_data',
+                5000,
+                0,
+              )
+
+              const currentDateRef = todayISO
+              const hasDateFilter = !!(dataInicio || dataFim)
+              const isTodayQuery =
+                !hasDateFilter &&
+                (message.toLowerCase().includes('hoje') ||
+                  message.toLowerCase().includes('agora') ||
+                  message.toLowerCase().includes('hoje em diante'))
+              const effectiveDataInicio = isTodayQuery ? currentDateRef : dataInicio
+              const effectiveDataFim = isTodayQuery ? currentDateRef : dataFim
               const plantoes = $app.findRecordsByFilter(
                 'plantoes',
                 '',
@@ -376,9 +433,11 @@ routerAdd(
                 }))
                 .filter((item) => {
                   const searchable = Object.values(item).join(' ').toLowerCase()
+                  const useDataInicio = effectiveDataInicio || dataInicio
+                  const useDataFim = effectiveDataFim || dataFim
                   const dateOk =
-                    (!dataInicio || item.dataInicio >= dataInicio) &&
-                    (!dataFim || item.dataInicio <= dataFim)
+                    (!useDataInicio || item.dataInicio >= useDataInicio) &&
+                    (!useDataFim || item.dataInicio <= useDataFim)
                   const freeOk = args.apenas_disponiveis !== true || item.disponivel
                   return (
                     dateOk &&
@@ -392,10 +451,11 @@ routerAdd(
               plantoesData = {
                 totalEncontrado: filtered.length,
                 retornados: Math.min(filtered.length, limite),
+                dataReferenciaServidor: todayISO,
                 filtros: {
                   filtro,
-                  data_inicio: dataInicio,
-                  data_fim: dataFim,
+                  data_inicio: effectiveDataInicio || dataInicio,
+                  data_fim: effectiveDataFim || dataFim,
                   instituicao,
                   pessoa,
                   especialidade,
